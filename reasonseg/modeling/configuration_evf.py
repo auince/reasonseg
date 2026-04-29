@@ -6,8 +6,6 @@ from transformers.utils import logging
 
 logger = logging.get_logger(__name__)
 
-EVF_PRETRAINED_CONFIG_ARCHIVE_MAP: dict[str, str] = {}
-
 
 class EvfConfig(PretrainedConfig):
     model_type = "evf"

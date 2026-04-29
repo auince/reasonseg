@@ -109,8 +109,6 @@ class EvfSam2Model(PreTrainedModel):
         self.config = config
         self.vision_pretrained = kwargs.get("vision_pretrained", None)
         self.encoder_pretrained = kwargs.get("encoder_pretrained", None)
-        self.dice_loss_weight = kwargs.get("dice_loss_weight", None)
-        self.bce_loss_weight = kwargs.get("bce_loss_weight", None)
         self.train_mask_decoder = kwargs.get("train_mask_decoder", False)
         self.train_prompt_encoder = kwargs.get("train_prompt_encoder", False)
         self.initialize_evf_modules(config)
