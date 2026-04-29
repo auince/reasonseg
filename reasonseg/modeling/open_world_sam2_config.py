@@ -37,14 +37,7 @@ def add_open_world_sam2_config(cfg) -> None:
     cfg.MODEL.OpenWorldSAM2.USE_CROSS_ATTENTION = False
     cfg.MODEL.OpenWorldSAM2.CROSS_ATTENTION_LAYERS = 1
     cfg.MODEL.OpenWorldSAM2.REASONSEG_ENABLED = False
-    cfg.MODEL.OpenWorldSAM2.query_parser_type = "deterministic"
     cfg.MODEL.OpenWorldSAM2.composition_mode = "composed_prompt"
-    cfg.MODEL.OpenWorldSAM2.no_target_threshold = 0.0
-    cfg.MODEL.OpenWorldSAM2.LIGHTWEIGHT_ADAPTER = CN()
-    cfg.MODEL.OpenWorldSAM2.LIGHTWEIGHT_ADAPTER.ENABLED = False
-    cfg.MODEL.OpenWorldSAM2.LIGHTWEIGHT_ADAPTER.HIDDEN_DIM = 256
-    cfg.MODEL.OpenWorldSAM2.LIGHTWEIGHT_ADAPTER.DROPOUT = 0.0
-    cfg.MODEL.OpenWorldSAM2.LIGHTWEIGHT_ADAPTER.SCALE = 1.0
 
     cfg.MODEL.OpenWorldSAM2.TEST = CN()
     cfg.MODEL.OpenWorldSAM2.TEST.SEMANTIC_ON = False

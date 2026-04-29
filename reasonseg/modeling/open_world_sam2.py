@@ -91,10 +91,7 @@ class OpenWorldSAM2(nn.Module):
         panoptic_on: bool,
         sam_iou: bool,
         reasonseg_enabled: bool = False,
-        query_parser_type: str = "deterministic",
         composition_mode: str = "composed_prompt",
-        no_target_threshold: float = 0.0,
-        lightweight_adapter: Mapping[str, Any] | None = None,
         use_visual_tokens: bool = True,
         use_cross_attention: bool = False,
         cross_attention_layers: int = 3,
@@ -150,10 +147,7 @@ class OpenWorldSAM2(nn.Module):
         self.panoptic_on = panoptic_on
         self.sam_iou = sam_iou
         self.reasonseg_enabled = reasonseg_enabled
-        self.query_parser_type = query_parser_type
         self.composition_mode = composition_mode
-        self.no_target_threshold = no_target_threshold
-        self.lightweight_adapter = dict(lightweight_adapter or {})
         self.top_k_on = top_k_on
         self.nms_on = nms_on
         self.test_topk_per_image = test_topk_per_image
@@ -276,15 +270,7 @@ class OpenWorldSAM2(nn.Module):
             "instance_on": cfg.MODEL.OpenWorldSAM2.TEST.INSTANCE_ON,
             "panoptic_on": cfg.MODEL.OpenWorldSAM2.TEST.PANOPTIC_ON,
             "reasonseg_enabled": cfg.MODEL.OpenWorldSAM2.REASONSEG_ENABLED,
-            "query_parser_type": cfg.MODEL.OpenWorldSAM2.query_parser_type,
             "composition_mode": cfg.MODEL.OpenWorldSAM2.composition_mode,
-            "no_target_threshold": cfg.MODEL.OpenWorldSAM2.no_target_threshold,
-            "lightweight_adapter": {
-                "enabled": cfg.MODEL.OpenWorldSAM2.LIGHTWEIGHT_ADAPTER.ENABLED,
-                "hidden_dim": cfg.MODEL.OpenWorldSAM2.LIGHTWEIGHT_ADAPTER.HIDDEN_DIM,
-                "dropout": cfg.MODEL.OpenWorldSAM2.LIGHTWEIGHT_ADAPTER.DROPOUT,
-                "scale": cfg.MODEL.OpenWorldSAM2.LIGHTWEIGHT_ADAPTER.SCALE,
-            },
             "top_k_on": cfg.MODEL.OpenWorldSAM2.TEST.TOP_K_ON,
             "nms_on": cfg.MODEL.OpenWorldSAM2.TEST.NMS_ON,
             "test_topk_per_image": cfg.MODEL.OpenWorldSAM2.TEST.DETECTIONS_PER_IMAGE,
