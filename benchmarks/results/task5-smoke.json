@@ -1,0 +1,209 @@
+{
+  "benchmark": {
+    "benchmark_id": "reasonseg_refexp_paper_benchmark",
+    "schema_version": "1.0.0",
+    "dataset_count": 3,
+    "default_noun_regression": null,
+    "canonical_slices": [
+      "noun",
+      "attribute",
+      "relation_action",
+      "no_target"
+    ]
+  },
+  "manifests": [
+    {
+      "manifest_file": "reasonseg_phase1_smoke_refcoco_short_manifest.json",
+      "entry_count": 4,
+      "slice_counts": {
+        "noun": 4,
+        "attribute": 0,
+        "relation_action": 0,
+        "no_target": 0
+      }
+    },
+    {
+      "manifest_file": "reasonseg_phase1_smoke_refcocoplus_attr_manifest.json",
+      "entry_count": 4,
+      "slice_counts": {
+        "noun": 0,
+        "attribute": 4,
+        "relation_action": 0,
+        "no_target": 0
+      }
+    },
+    {
+      "manifest_file": "reasonseg_phase1_smoke_refcocog_long_manifest.json",
+      "entry_count": 4,
+      "slice_counts": {
+        "noun": 0,
+        "attribute": 0,
+        "relation_action": 4,
+        "no_target": 0
+      }
+    },
+    {
+      "manifest_file": "reasonseg_refexp_paper_no_target_manifest.json",
+      "entry_count": 2,
+      "slice_counts": {
+        "noun": 0,
+        "attribute": 0,
+        "relation_action": 0,
+        "no_target": 2
+      }
+    }
+  ],
+  "prediction_schema_version": "1.0.0",
+  "suite_metrics": {
+    "entry_count": 14,
+    "positive_entry_count": 12,
+    "no_target_entry_count": 2,
+    "positive_metrics_by_family": {
+      "openworldsam_grounding": {
+        "grounding/cIoU": 66.83937823834196,
+        "grounding/mIoU": 66.24999999999999,
+        "grounding/precision@0.5": 100.0,
+        "grounding/precision@0.6": 75.0,
+        "grounding/precision@0.7": 41.666666666666664,
+        "grounding/precision@0.8": 25.0,
+        "grounding/precision@0.9": 8.333333333333334
+      }
+    },
+    "no_target_metrics": {
+      "no_target/rejection_rate": 50.0,
+      "no_target/false_positive_rate": 50.0,
+      "no_target/rejected": 1,
+      "no_target/total": 2,
+      "no_target/false_positive_mask_total": 1
+    },
+    "no_target_metric_families": [
+      "openworldsam_grounding"
+    ]
+  },
+  "dataset_metrics": {
+    "refcoco_plus_unc": {
+      "entry_count": 4,
+      "positive_entry_count": 4,
+      "no_target_entry_count": 0,
+      "positive_metrics_by_family": {
+        "openworldsam_grounding": {
+          "grounding/cIoU": 66.86567164179104,
+          "grounding/mIoU": 66.25,
+          "grounding/precision@0.5": 100.0,
+          "grounding/precision@0.6": 75.0,
+          "grounding/precision@0.7": 50.0,
+          "grounding/precision@0.8": 25.0,
+          "grounding/precision@0.9": 0.0
+        }
+      }
+    },
+    "refcoco_unc": {
+      "entry_count": 6,
+      "positive_entry_count": 4,
+      "no_target_entry_count": 2,
+      "positive_metrics_by_family": {
+        "openworldsam_grounding": {
+          "grounding/cIoU": 70.6896551724138,
+          "grounding/mIoU": 70.0,
+          "grounding/precision@0.5": 100.0,
+          "grounding/precision@0.6": 75.0,
+          "grounding/precision@0.7": 50.0,
+          "grounding/precision@0.8": 50.0,
+          "grounding/precision@0.9": 25.0
+        }
+      },
+      "no_target_metrics": {
+        "no_target/rejection_rate": 50.0,
+        "no_target/false_positive_rate": 50.0,
+        "no_target/rejected": 1,
+        "no_target/total": 2,
+        "no_target/false_positive_mask_total": 1
+      },
+      "no_target_metric_families": [
+        "openworldsam_grounding"
+      ]
+    },
+    "refcocog_umd": {
+      "entry_count": 4,
+      "positive_entry_count": 4,
+      "no_target_entry_count": 0,
+      "positive_metrics_by_family": {
+        "openworldsam_grounding": {
+          "grounding/cIoU": 63.529411764705884,
+          "grounding/mIoU": 62.5,
+          "grounding/precision@0.5": 100.0,
+          "grounding/precision@0.6": 75.0,
+          "grounding/precision@0.7": 25.0,
+          "grounding/precision@0.8": 0.0,
+          "grounding/precision@0.9": 0.0
+        }
+      }
+    }
+  },
+  "slice_metrics": {
+    "noun": {
+      "entry_count": 4,
+      "positive_entry_count": 4,
+      "no_target_entry_count": 0,
+      "positive_metrics_by_family": {
+        "openworldsam_grounding": {
+          "grounding/cIoU": 70.6896551724138,
+          "grounding/mIoU": 70.0,
+          "grounding/precision@0.5": 100.0,
+          "grounding/precision@0.6": 75.0,
+          "grounding/precision@0.7": 50.0,
+          "grounding/precision@0.8": 50.0,
+          "grounding/precision@0.9": 25.0
+        }
+      }
+    },
+    "attribute": {
+      "entry_count": 4,
+      "positive_entry_count": 4,
+      "no_target_entry_count": 0,
+      "positive_metrics_by_family": {
+        "openworldsam_grounding": {
+          "grounding/cIoU": 66.86567164179104,
+          "grounding/mIoU": 66.25,
+          "grounding/precision@0.5": 100.0,
+          "grounding/precision@0.6": 75.0,
+          "grounding/precision@0.7": 50.0,
+          "grounding/precision@0.8": 25.0,
+          "grounding/precision@0.9": 0.0
+        }
+      }
+    },
+    "relation_action": {
+      "entry_count": 4,
+      "positive_entry_count": 4,
+      "no_target_entry_count": 0,
+      "positive_metrics_by_family": {
+        "openworldsam_grounding": {
+          "grounding/cIoU": 63.529411764705884,
+          "grounding/mIoU": 62.5,
+          "grounding/precision@0.5": 100.0,
+          "grounding/precision@0.6": 75.0,
+          "grounding/precision@0.7": 25.0,
+          "grounding/precision@0.8": 0.0,
+          "grounding/precision@0.9": 0.0
+        }
+      }
+    },
+    "no_target": {
+      "entry_count": 2,
+      "positive_entry_count": 0,
+      "no_target_entry_count": 2,
+      "positive_metrics_by_family": {},
+      "no_target_metrics": {
+        "no_target/rejection_rate": 50.0,
+        "no_target/false_positive_rate": 50.0,
+        "no_target/rejected": 1,
+        "no_target/total": 2,
+        "no_target/false_positive_mask_total": 1
+      },
+      "no_target_metric_families": [
+        "openworldsam_grounding"
+      ]
+    }
+  }
+}

@@ -1,0 +1,118 @@
+{
+  "manifest_kind": "phase1_materialized_slice_manifest",
+  "benchmark_spec_version": "1.0.0",
+  "entries": [
+    {
+      "dataset_id": "refcoco_unc",
+      "dataset_role": "noun_short_expression_baseline",
+      "split": "train",
+      "image_id": 102456,
+      "query_text": "dog",
+      "query_struct": {
+        "target": "dog",
+        "attributes": [],
+        "relations": [],
+        "actions": [],
+        "negatives": [],
+        "exists": true
+      },
+      "requested_target": "dog",
+      "slice_tags": [
+        "noun"
+      ],
+      "image_category_names": [
+        "dog",
+        "person",
+        "grass"
+      ],
+      "positive_mask_count": 1,
+      "source_annotation_ids": [
+        61001
+      ]
+    },
+    {
+      "dataset_id": "refcoco_unc",
+      "dataset_role": "noun_short_expression_baseline",
+      "split": "train",
+      "image_id": 104872,
+      "query_text": "person",
+      "query_struct": {
+        "target": "person",
+        "attributes": [],
+        "relations": [],
+        "actions": [],
+        "negatives": [],
+        "exists": true
+      },
+      "requested_target": "person",
+      "slice_tags": [
+        "noun"
+      ],
+      "image_category_names": [
+        "person",
+        "bench",
+        "tree"
+      ],
+      "positive_mask_count": 1,
+      "source_annotation_ids": [
+        61002
+      ]
+    },
+    {
+      "dataset_id": "refcoco_unc",
+      "dataset_role": "noun_short_expression_baseline",
+      "split": "val",
+      "image_id": 205341,
+      "query_text": "cat",
+      "query_struct": {
+        "target": "cat",
+        "attributes": [],
+        "relations": [],
+        "actions": [],
+        "negatives": [],
+        "exists": true
+      },
+      "requested_target": "cat",
+      "slice_tags": [
+        "noun"
+      ],
+      "image_category_names": [
+        "cat",
+        "chair",
+        "table"
+      ],
+      "positive_mask_count": 1,
+      "source_annotation_ids": [
+        61003
+      ]
+    },
+    {
+      "dataset_id": "refcoco_unc",
+      "dataset_role": "noun_short_expression_baseline",
+      "split": "val",
+      "image_id": 207654,
+      "query_text": "bus",
+      "query_struct": {
+        "target": "bus",
+        "attributes": [],
+        "relations": [],
+        "actions": [],
+        "negatives": [],
+        "exists": true
+      },
+      "requested_target": "bus",
+      "slice_tags": [
+        "noun"
+      ],
+      "image_category_names": [
+        "bus",
+        "person",
+        "car"
+      ],
+      "positive_mask_count": 1,
+      "source_annotation_ids": [
+        61004
+      ]
+    }
+  ]
+}

@@ -1,0 +1,326 @@
+{
+  "manifest_kind": "reasonseg_phase1_smoke_provenance",
+  "benchmark_spec_version": "1.0.0",
+  "entries": [
+    {
+      "subset_id": "refcoco_short",
+      "manifest_file": "reasonseg_phase1_smoke_refcoco_short_manifest.json",
+      "entry_index": 0,
+      "dataset_id": "refcoco_unc",
+      "dataset_role": "noun_short_expression_baseline",
+      "source_split": "train",
+      "image_id": 102456,
+      "query_text": "dog",
+      "requested_target": "dog",
+      "source_ref_id": 41001,
+      "source_query_id": 51001,
+      "source_query_origin": "refcoco_sentence",
+      "source_annotation_ids": [
+        61001
+      ],
+      "slice_tags": [
+        "noun"
+      ]
+    },
+    {
+      "subset_id": "refcoco_short",
+      "manifest_file": "reasonseg_phase1_smoke_refcoco_short_manifest.json",
+      "entry_index": 1,
+      "dataset_id": "refcoco_unc",
+      "dataset_role": "noun_short_expression_baseline",
+      "source_split": "train",
+      "image_id": 104872,
+      "query_text": "person",
+      "requested_target": "person",
+      "source_ref_id": 41002,
+      "source_query_id": 51002,
+      "source_query_origin": "refcoco_sentence",
+      "source_annotation_ids": [
+        61002
+      ],
+      "slice_tags": [
+        "noun"
+      ]
+    },
+    {
+      "subset_id": "refcoco_short",
+      "manifest_file": "reasonseg_phase1_smoke_refcoco_short_manifest.json",
+      "entry_index": 2,
+      "dataset_id": "refcoco_unc",
+      "dataset_role": "noun_short_expression_baseline",
+      "source_split": "val",
+      "image_id": 205341,
+      "query_text": "cat",
+      "requested_target": "cat",
+      "source_ref_id": 41003,
+      "source_query_id": 51003,
+      "source_query_origin": "refcoco_sentence",
+      "source_annotation_ids": [
+        61003
+      ],
+      "slice_tags": [
+        "noun"
+      ]
+    },
+    {
+      "subset_id": "refcoco_short",
+      "manifest_file": "reasonseg_phase1_smoke_refcoco_short_manifest.json",
+      "entry_index": 3,
+      "dataset_id": "refcoco_unc",
+      "dataset_role": "noun_short_expression_baseline",
+      "source_split": "val",
+      "image_id": 207654,
+      "query_text": "bus",
+      "requested_target": "bus",
+      "source_ref_id": 41004,
+      "source_query_id": 51004,
+      "source_query_origin": "refcoco_sentence",
+      "source_annotation_ids": [
+        61004
+      ],
+      "slice_tags": [
+        "noun"
+      ]
+    },
+    {
+      "subset_id": "refcocoplus_attr",
+      "manifest_file": "reasonseg_phase1_smoke_refcocoplus_attr_manifest.json",
+      "entry_index": 0,
+      "dataset_id": "refcoco_plus_unc",
+      "dataset_role": "attribute_sensitive_expression_slice",
+      "source_split": "train",
+      "image_id": 110245,
+      "query_text": "red dress",
+      "requested_target": "dress",
+      "source_ref_id": 42001,
+      "source_query_id": 52001,
+      "source_query_origin": "refcoco_plus_sentence",
+      "source_annotation_ids": [
+        71001
+      ],
+      "slice_tags": [
+        "attribute"
+      ]
+    },
+    {
+      "subset_id": "refcocoplus_attr",
+      "manifest_file": "reasonseg_phase1_smoke_refcocoplus_attr_manifest.json",
+      "entry_index": 1,
+      "dataset_id": "refcoco_plus_unc",
+      "dataset_role": "attribute_sensitive_expression_slice",
+      "source_split": "train",
+      "image_id": 112876,
+      "query_text": "blue umbrella",
+      "requested_target": "umbrella",
+      "source_ref_id": 42002,
+      "source_query_id": 52002,
+      "source_query_origin": "refcoco_plus_sentence",
+      "source_annotation_ids": [
+        71002
+      ],
+      "slice_tags": [
+        "attribute"
+      ]
+    },
+    {
+      "subset_id": "refcocoplus_attr",
+      "manifest_file": "reasonseg_phase1_smoke_refcocoplus_attr_manifest.json",
+      "entry_index": 2,
+      "dataset_id": "refcoco_plus_unc",
+      "dataset_role": "attribute_sensitive_expression_slice",
+      "source_split": "val",
+      "image_id": 210763,
+      "query_text": "white dog",
+      "requested_target": "dog",
+      "source_ref_id": 42003,
+      "source_query_id": 52003,
+      "source_query_origin": "refcoco_plus_sentence",
+      "source_annotation_ids": [
+        71003
+      ],
+      "slice_tags": [
+        "attribute"
+      ]
+    },
+    {
+      "subset_id": "refcocoplus_attr",
+      "manifest_file": "reasonseg_phase1_smoke_refcocoplus_attr_manifest.json",
+      "entry_index": 3,
+      "dataset_id": "refcoco_plus_unc",
+      "dataset_role": "attribute_sensitive_expression_slice",
+      "source_split": "val",
+      "image_id": 212984,
+      "query_text": "green bicycle",
+      "requested_target": "bicycle",
+      "source_ref_id": 42004,
+      "source_query_id": 52004,
+      "source_query_origin": "refcoco_plus_sentence",
+      "source_annotation_ids": [
+        71004
+      ],
+      "slice_tags": [
+        "attribute"
+      ]
+    },
+    {
+      "subset_id": "refcocog_long",
+      "manifest_file": "reasonseg_phase1_smoke_refcocog_long_manifest.json",
+      "entry_index": 0,
+      "dataset_id": "refcocog_umd",
+      "dataset_role": "long_compositional_expression_slice",
+      "source_split": "train",
+      "image_id": 120553,
+      "query_text": "man holding a surfboard",
+      "requested_target": "man",
+      "source_ref_id": 43001,
+      "source_query_id": 53001,
+      "source_query_origin": "refcocog_sentence",
+      "source_annotation_ids": [
+        81001
+      ],
+      "slice_tags": [
+        "relation_action",
+        "action_only"
+      ]
+    },
+    {
+      "subset_id": "refcocog_long",
+      "manifest_file": "reasonseg_phase1_smoke_refcocog_long_manifest.json",
+      "entry_index": 1,
+      "dataset_id": "refcocog_umd",
+      "dataset_role": "long_compositional_expression_slice",
+      "source_split": "train",
+      "image_id": 122664,
+      "query_text": "woman next to the bench",
+      "requested_target": "woman",
+      "source_ref_id": 43002,
+      "source_query_id": 53002,
+      "source_query_origin": "refcocog_sentence",
+      "source_annotation_ids": [
+        81002
+      ],
+      "slice_tags": [
+        "relation_action",
+        "relation_only"
+      ]
+    },
+    {
+      "subset_id": "refcocog_long",
+      "manifest_file": "reasonseg_phase1_smoke_refcocog_long_manifest.json",
+      "entry_index": 2,
+      "dataset_id": "refcocog_umd",
+      "dataset_role": "long_compositional_expression_slice",
+      "source_split": "val",
+      "image_id": 220667,
+      "query_text": "girl riding the skateboard",
+      "requested_target": "girl",
+      "source_ref_id": 43003,
+      "source_query_id": 53003,
+      "source_query_origin": "refcocog_sentence",
+      "source_annotation_ids": [
+        81003
+      ],
+      "slice_tags": [
+        "relation_action",
+        "action_only"
+      ]
+    },
+    {
+      "subset_id": "refcocog_long",
+      "manifest_file": "reasonseg_phase1_smoke_refcocog_long_manifest.json",
+      "entry_index": 3,
+      "dataset_id": "refcocog_umd",
+      "dataset_role": "long_compositional_expression_slice",
+      "source_split": "val",
+      "image_id": 222778,
+      "query_text": "boy in front of the kite",
+      "requested_target": "boy",
+      "source_ref_id": 43004,
+      "source_query_id": 53004,
+      "source_query_origin": "refcocog_sentence",
+      "source_annotation_ids": [
+        81004
+      ],
+      "slice_tags": [
+        "relation_action",
+        "relation_only"
+      ]
+    },
+    {
+      "subset_id": "noun_regression",
+      "manifest_file": "reasonseg_phase1_smoke_noun_regression_manifest.json",
+      "entry_index": 0,
+      "dataset_id": "coco_2017_48_17_ov",
+      "dataset_role": "noun_regression",
+      "source_split": "train2017",
+      "image_id": 130145,
+      "query_text": "dog",
+      "requested_target": "dog",
+      "source_ref_id": "coco_ann_91001",
+      "source_query_id": "coco_cat_dog",
+      "source_query_origin": "category_name_derived_from_public_annotation",
+      "source_annotation_ids": [
+        91001
+      ],
+      "slice_tags": [
+        "noun"
+      ]
+    },
+    {
+      "subset_id": "noun_regression",
+      "manifest_file": "reasonseg_phase1_smoke_noun_regression_manifest.json",
+      "entry_index": 1,
+      "dataset_id": "coco_2017_48_17_ov",
+      "dataset_role": "noun_regression",
+      "source_split": "train2017",
+      "image_id": 132268,
+      "query_text": "elephant",
+      "requested_target": "elephant",
+      "source_ref_id": "coco_image_132268",
+      "source_query_id": "absent_elephant",
+      "source_query_origin": "public_class_universe_absent_pairing",
+      "source_annotation_ids": [],
+      "slice_tags": [
+        "no_target"
+      ]
+    },
+    {
+      "subset_id": "noun_regression",
+      "manifest_file": "reasonseg_phase1_smoke_noun_regression_manifest.json",
+      "entry_index": 2,
+      "dataset_id": "coco_2017_48_17_ov",
+      "dataset_role": "noun_regression",
+      "source_split": "val2017",
+      "image_id": 230472,
+      "query_text": "chair",
+      "requested_target": "chair",
+      "source_ref_id": "coco_ann_91002",
+      "source_query_id": "coco_cat_chair",
+      "source_query_origin": "category_name_derived_from_public_annotation",
+      "source_annotation_ids": [
+        91002
+      ],
+      "slice_tags": [
+        "noun"
+      ]
+    },
+    {
+      "subset_id": "noun_regression",
+      "manifest_file": "reasonseg_phase1_smoke_noun_regression_manifest.json",
+      "entry_index": 3,
+      "dataset_id": "coco_2017_48_17_ov",
+      "dataset_role": "noun_regression",
+      "source_split": "val2017",
+      "image_id": 232584,
+      "query_text": "zebra",
+      "requested_target": "zebra",
+      "source_ref_id": "coco_image_232584",
+      "source_query_id": "absent_zebra",
+      "source_query_origin": "public_class_universe_absent_pairing",
+      "source_annotation_ids": [],
+      "slice_tags": [
+        "no_target"
+      ]
+    }
+  ]
+}

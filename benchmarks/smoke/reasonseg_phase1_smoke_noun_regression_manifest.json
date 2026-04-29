@@ -1,0 +1,118 @@
+{
+  "manifest_kind": "phase1_materialized_slice_manifest",
+  "benchmark_spec_version": "1.0.0",
+  "entries": [
+    {
+      "dataset_id": "coco_2017_48_17_ov",
+      "dataset_role": "noun_regression",
+      "split": "train2017",
+      "image_id": 130145,
+      "query_text": "dog",
+      "query_struct": {
+        "target": "dog",
+        "attributes": [],
+        "relations": [],
+        "actions": [],
+        "negatives": [],
+        "exists": true
+      },
+      "requested_target": "dog",
+      "slice_tags": [
+        "noun"
+      ],
+      "image_category_names": [
+        "dog",
+        "person",
+        "grass"
+      ],
+      "positive_mask_count": 1,
+      "source_annotation_ids": [
+        91001
+      ]
+    },
+    {
+      "dataset_id": "coco_2017_48_17_ov",
+      "dataset_role": "noun_regression",
+      "split": "train2017",
+      "image_id": 132268,
+      "query_text": "elephant",
+      "query_struct": {
+        "target": null,
+        "attributes": [],
+        "relations": [],
+        "actions": [],
+        "negatives": [
+          "absent_object"
+        ],
+        "exists": false
+      },
+      "requested_target": "elephant",
+      "slice_tags": [
+        "no_target"
+      ],
+      "image_category_names": [
+        "person",
+        "bicycle",
+        "traffic light"
+      ],
+      "positive_mask_count": 0,
+      "source_annotation_ids": []
+    },
+    {
+      "dataset_id": "coco_2017_48_17_ov",
+      "dataset_role": "noun_regression",
+      "split": "val2017",
+      "image_id": 230472,
+      "query_text": "chair",
+      "query_struct": {
+        "target": "chair",
+        "attributes": [],
+        "relations": [],
+        "actions": [],
+        "negatives": [],
+        "exists": true
+      },
+      "requested_target": "chair",
+      "slice_tags": [
+        "noun"
+      ],
+      "image_category_names": [
+        "chair",
+        "table",
+        "person"
+      ],
+      "positive_mask_count": 1,
+      "source_annotation_ids": [
+        91002
+      ]
+    },
+    {
+      "dataset_id": "coco_2017_48_17_ov",
+      "dataset_role": "noun_regression",
+      "split": "val2017",
+      "image_id": 232584,
+      "query_text": "zebra",
+      "query_struct": {
+        "target": null,
+        "attributes": [],
+        "relations": [],
+        "actions": [],
+        "negatives": [
+          "absent_object"
+        ],
+        "exists": false
+      },
+      "requested_target": "zebra",
+      "slice_tags": [
+        "no_target"
+      ],
+      "image_category_names": [
+        "person",
+        "car",
+        "bench"
+      ],
+      "positive_mask_count": 0,
+      "source_annotation_ids": []
+    }
+  ]
+}

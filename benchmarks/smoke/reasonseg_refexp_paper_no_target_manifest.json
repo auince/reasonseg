@@ -1,0 +1,66 @@
+{
+  "manifest_kind": "phase1_materialized_slice_manifest",
+  "benchmark_spec_version": "1.0.0",
+  "entries": [
+    {
+      "dataset_id": "refcoco_unc",
+      "dataset_role": "noun_short_expression_baseline",
+      "split": "val",
+      "image_id": 305001,
+      "query_text": "zebra",
+      "query_struct": {
+        "target": null,
+        "attributes": [],
+        "relations": [],
+        "actions": [],
+        "negatives": [
+          "absent_object"
+        ],
+        "exists": false
+      },
+      "requested_target": "zebra",
+      "slice_tags": [
+        "no_target"
+      ],
+      "image_category_names": [
+        "dog",
+        "person",
+        "grass"
+      ],
+      "positive_mask_count": 0,
+      "source_annotation_ids": [
+        71001
+      ]
+    },
+    {
+      "dataset_id": "refcoco_unc",
+      "dataset_role": "noun_short_expression_baseline",
+      "split": "testA",
+      "image_id": 305002,
+      "query_text": "airplane",
+      "query_struct": {
+        "target": null,
+        "attributes": [],
+        "relations": [],
+        "actions": [],
+        "negatives": [
+          "absent_object"
+        ],
+        "exists": false
+      },
+      "requested_target": "airplane",
+      "slice_tags": [
+        "no_target"
+      ],
+      "image_category_names": [
+        "person",
+        "bench",
+        "tree"
+      ],
+      "positive_mask_count": 0,
+      "source_annotation_ids": [
+        71002
+      ]
+    }
+  ]
+}

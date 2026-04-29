@@ -1,0 +1,76 @@
+DATASETS:
+  TRAIN: ("refcoco_train_unc",)
+  TEST: ("refcoco_val_unc",)
+
+MODEL:
+  META_ARCHITECTURE: "OpenWorldSAM2"
+  DEVICE: "cuda"
+  WEIGHTS: ""
+  PIXEL_MEAN: [123.675, 116.280, 103.530]
+  PIXEL_STD: [58.395, 57.120, 57.375]
+  OpenWorldSAM2:
+    NO_OBJECT_WEIGHT: 0.0
+    OBJECTNESS_WEIGHT: 0.0
+    MASK_WEIGHT: 20.0
+    DICE_WEIGHT: 0.0
+    QUERY_DIM: 256
+    TORCH_DTYPE: "fp32"
+    EVF_CONFIG: "YxZhang/evf-sam2-multitask"
+    TOKENIZER_CONFIG: "YxZhang/evf-sam2-multitask"
+    HF_LOCAL_FILES_ONLY: false
+    LOCAL_EVF_CONFIG: ""
+    LOCAL_TOKENIZER_CONFIG: ""
+    TRAIN_MASK_DECODER: false
+    TRAIN_PROMPT_ENCODER: false
+    TRAIN_TIE_BREAKER: true
+    TRAIN_VLM: false
+    SAM_IOU: true
+    USE_VISUAL_TOKENS: true
+    USE_CROSS_ATTENTION: true
+    CROSS_ATTENTION_LAYERS: 3
+    ENCODER_PRETRAINED: "/data/lch/Frames/ReasonSeg/checkpoints/beit3_large_patch16_224.pth"
+    VISION_PRETRAINED: "/data/lch/Frames/ReasonSeg/checkpoints/sam2_hiera_large.pt"
+    NUM_OBJECT_QUERIES: 20
+    TEST:
+      SEMANTIC_ON: false
+      INSTANCE_ON: false
+      PANOPTIC_ON: false
+      REFER_ON: true
+      TOP_K_ON: false
+      NMS_ON: false
+      NMS_THRESHOLD: 0.5
+      IOU_THRESHOLD: 0.0
+      DETECTIONS_PER_IMAGE: 30
+      TWO_STAGE_INFERENCE: false
+
+INPUT:
+  IMAGE_SIZE: 1024
+  FORMAT: "RGB"
+  DATASET_MAPPER_NAME: "refcoco"
+
+SOLVER:
+  AMP:
+    ENABLED: false
+  CHECKPOINT_PERIOD: 1
+  MAX_ITER: 500000
+  IMS_PER_BATCH: 1
+  BASE_LR: 0.0001
+  LR_SCHEDULER_NAME: "WarmupCosineLR"
+  WARMUP_FACTOR: 0.001
+  WARMUP_ITERS: 2000
+  WARMUP_METHOD: "linear"
+  CLIP_GRADIENTS:
+    ENABLED: true
+    CLIP_TYPE: "full_model"
+    CLIP_VALUE: 0.005
+    NORM_TYPE: 2.0
+
+TEST:
+  EVAL_PERIOD: 1
+
+DATALOADER:
+  FILTER_EMPTY_ANNOTATIONS: true
+  NUM_WORKERS: 0
+
+OUTPUT_DIR: "outputs/refcoco"
+VERSION: 2

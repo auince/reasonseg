@@ -1,0 +1,142 @@
+{
+  "manifest_kind": "phase1_materialized_slice_manifest",
+  "benchmark_spec_version": "1.0.0",
+  "entries": [
+    {
+      "dataset_id": "refcocog_umd",
+      "dataset_role": "long_compositional_expression_slice",
+      "split": "train",
+      "image_id": 120553,
+      "query_text": "man holding a surfboard",
+      "query_struct": {
+        "target": "man",
+        "attributes": [],
+        "relations": [],
+        "actions": [
+          {
+            "verb": "holding",
+            "target": "surfboard"
+          }
+        ],
+        "negatives": [],
+        "exists": true
+      },
+      "requested_target": "man",
+      "slice_tags": [
+        "relation_action",
+        "action_only"
+      ],
+      "image_category_names": [
+        "man",
+        "surfboard",
+        "wave"
+      ],
+      "positive_mask_count": 1,
+      "source_annotation_ids": [
+        81001
+      ]
+    },
+    {
+      "dataset_id": "refcocog_umd",
+      "dataset_role": "long_compositional_expression_slice",
+      "split": "train",
+      "image_id": 122664,
+      "query_text": "woman next to the bench",
+      "query_struct": {
+        "target": "woman",
+        "attributes": [],
+        "relations": [
+          {
+            "type": "next_to",
+            "target": "bench"
+          }
+        ],
+        "actions": [],
+        "negatives": [],
+        "exists": true
+      },
+      "requested_target": "woman",
+      "slice_tags": [
+        "relation_action",
+        "relation_only"
+      ],
+      "image_category_names": [
+        "woman",
+        "bench",
+        "tree"
+      ],
+      "positive_mask_count": 1,
+      "source_annotation_ids": [
+        81002
+      ]
+    },
+    {
+      "dataset_id": "refcocog_umd",
+      "dataset_role": "long_compositional_expression_slice",
+      "split": "val",
+      "image_id": 220667,
+      "query_text": "girl riding the skateboard",
+      "query_struct": {
+        "target": "girl",
+        "attributes": [],
+        "relations": [],
+        "actions": [
+          {
+            "verb": "riding",
+            "target": "skateboard"
+          }
+        ],
+        "negatives": [],
+        "exists": true
+      },
+      "requested_target": "girl",
+      "slice_tags": [
+        "relation_action",
+        "action_only"
+      ],
+      "image_category_names": [
+        "girl",
+        "skateboard",
+        "road"
+      ],
+      "positive_mask_count": 1,
+      "source_annotation_ids": [
+        81003
+      ]
+    },
+    {
+      "dataset_id": "refcocog_umd",
+      "dataset_role": "long_compositional_expression_slice",
+      "split": "val",
+      "image_id": 222778,
+      "query_text": "boy in front of the kite",
+      "query_struct": {
+        "target": "boy",
+        "attributes": [],
+        "relations": [
+          {
+            "type": "in_front_of",
+            "target": "kite"
+          }
+        ],
+        "actions": [],
+        "negatives": [],
+        "exists": true
+      },
+      "requested_target": "boy",
+      "slice_tags": [
+        "relation_action",
+        "relation_only"
+      ],
+      "image_category_names": [
+        "boy",
+        "kite",
+        "sky"
+      ],
+      "positive_mask_count": 1,
+      "source_annotation_ids": [
+        81004
+      ]
+    }
+  ]
+}

@@ -1,0 +1,126 @@
+{
+  "manifest_kind": "phase1_materialized_slice_manifest",
+  "benchmark_spec_version": "1.0.0",
+  "entries": [
+    {
+      "dataset_id": "refcoco_plus_unc",
+      "dataset_role": "attribute_sensitive_expression_slice",
+      "split": "train",
+      "image_id": 110245,
+      "query_text": "red dress",
+      "query_struct": {
+        "target": "dress",
+        "attributes": [
+          "red"
+        ],
+        "relations": [],
+        "actions": [],
+        "negatives": [],
+        "exists": true
+      },
+      "requested_target": "dress",
+      "slice_tags": [
+        "attribute"
+      ],
+      "image_category_names": [
+        "dress",
+        "person",
+        "shoe"
+      ],
+      "positive_mask_count": 1,
+      "source_annotation_ids": [
+        71001
+      ]
+    },
+    {
+      "dataset_id": "refcoco_plus_unc",
+      "dataset_role": "attribute_sensitive_expression_slice",
+      "split": "train",
+      "image_id": 112876,
+      "query_text": "blue umbrella",
+      "query_struct": {
+        "target": "umbrella",
+        "attributes": [
+          "blue"
+        ],
+        "relations": [],
+        "actions": [],
+        "negatives": [],
+        "exists": true
+      },
+      "requested_target": "umbrella",
+      "slice_tags": [
+        "attribute"
+      ],
+      "image_category_names": [
+        "umbrella",
+        "person",
+        "bag"
+      ],
+      "positive_mask_count": 1,
+      "source_annotation_ids": [
+        71002
+      ]
+    },
+    {
+      "dataset_id": "refcoco_plus_unc",
+      "dataset_role": "attribute_sensitive_expression_slice",
+      "split": "val",
+      "image_id": 210763,
+      "query_text": "white dog",
+      "query_struct": {
+        "target": "dog",
+        "attributes": [
+          "white"
+        ],
+        "relations": [],
+        "actions": [],
+        "negatives": [],
+        "exists": true
+      },
+      "requested_target": "dog",
+      "slice_tags": [
+        "attribute"
+      ],
+      "image_category_names": [
+        "dog",
+        "grass",
+        "person"
+      ],
+      "positive_mask_count": 1,
+      "source_annotation_ids": [
+        71003
+      ]
+    },
+    {
+      "dataset_id": "refcoco_plus_unc",
+      "dataset_role": "attribute_sensitive_expression_slice",
+      "split": "val",
+      "image_id": 212984,
+      "query_text": "green bicycle",
+      "query_struct": {
+        "target": "bicycle",
+        "attributes": [
+          "green"
+        ],
+        "relations": [],
+        "actions": [],
+        "negatives": [],
+        "exists": true
+      },
+      "requested_target": "bicycle",
+      "slice_tags": [
+        "attribute"
+      ],
+      "image_category_names": [
+        "bicycle",
+        "person",
+        "road"
+      ],
+      "positive_mask_count": 1,
+      "source_annotation_ids": [
+        71004
+      ]
+    }
+  ]
+}

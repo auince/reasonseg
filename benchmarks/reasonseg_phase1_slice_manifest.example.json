@@ -1,0 +1,126 @@
+{
+  "manifest_kind": "phase1_materialized_slice_manifest",
+  "benchmark_spec_version": "1.0.0",
+  "demo_only": true,
+  "entries": [
+    {
+      "dataset_id": "refcoco_unc",
+      "dataset_role": "noun_short_expression_baseline",
+      "split": "val",
+      "image_id": 101,
+      "query_text": "dog",
+      "query_struct": {
+        "target": "dog",
+        "attributes": [],
+        "relations": [],
+        "actions": [],
+        "negatives": [],
+        "exists": true
+      },
+      "requested_target": "dog",
+      "slice_tags": [
+        "noun"
+      ],
+      "image_category_names": [
+        "dog",
+        "person",
+        "grass"
+      ],
+      "positive_mask_count": 1,
+      "source_annotation_ids": [
+        5001
+      ]
+    },
+    {
+      "dataset_id": "refcoco_plus_unc",
+      "dataset_role": "attribute_sensitive_expression_slice",
+      "split": "val",
+      "image_id": 202,
+      "query_text": "red dress",
+      "query_struct": {
+        "target": "dress",
+        "attributes": [
+          "red"
+        ],
+        "relations": [],
+        "actions": [],
+        "negatives": [],
+        "exists": true
+      },
+      "requested_target": "dress",
+      "slice_tags": [
+        "attribute"
+      ],
+      "image_category_names": [
+        "dress",
+        "person"
+      ],
+      "positive_mask_count": 1,
+      "source_annotation_ids": [
+        6001
+      ]
+    },
+    {
+      "dataset_id": "refcocog_umd",
+      "dataset_role": "long_compositional_expression_slice",
+      "split": "val",
+      "image_id": 303,
+      "query_text": "man watering flowers",
+      "query_struct": {
+        "target": "man",
+        "attributes": [],
+        "relations": [],
+        "actions": [
+          {
+            "verb": "watering",
+            "target": "flowers"
+          }
+        ],
+        "negatives": [],
+        "exists": true
+      },
+      "requested_target": "man",
+      "slice_tags": [
+        "relation_action",
+        "action_only"
+      ],
+      "image_category_names": [
+        "man",
+        "flowers",
+        "watering_can"
+      ],
+      "positive_mask_count": 1,
+      "source_annotation_ids": [
+        7001
+      ]
+    },
+    {
+      "dataset_id": "coco_2017_48_17_ov",
+      "dataset_role": "noun_regression",
+      "split": "val2017",
+      "image_id": 404,
+      "query_text": "elephant",
+      "query_struct": {
+        "target": null,
+        "attributes": [],
+        "relations": [],
+        "actions": [],
+        "negatives": [
+          "absent_object"
+        ],
+        "exists": false
+      },
+      "requested_target": "elephant",
+      "slice_tags": [
+        "no_target"
+      ],
+      "image_category_names": [
+        "person",
+        "bicycle",
+        "dog"
+      ],
+      "positive_mask_count": 0,
+      "source_annotation_ids": []
+    }
+  ]
+}

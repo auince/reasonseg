@@ -1,0 +1,103 @@
+{
+  "prediction_schema_version": "1.0.0",
+  "predictions": [
+    {
+      "manifest_file": "reasonseg_phase1_smoke_refcoco_short_manifest.json",
+      "entry_index": 0,
+      "intersection": 80,
+      "union": 100
+    },
+    {
+      "manifest_file": "reasonseg_phase1_smoke_refcoco_short_manifest.json",
+      "entry_index": 1,
+      "intersection": 60,
+      "union": 100
+    },
+    {
+      "manifest_file": "reasonseg_phase1_smoke_refcoco_short_manifest.json",
+      "entry_index": 2,
+      "intersection": 45,
+      "union": 50
+    },
+    {
+      "manifest_file": "reasonseg_phase1_smoke_refcoco_short_manifest.json",
+      "entry_index": 3,
+      "intersection": 20,
+      "union": 40
+    },
+    {
+      "manifest_file": "reasonseg_phase1_smoke_refcocoplus_attr_manifest.json",
+      "entry_index": 0,
+      "intersection": 70,
+      "union": 100
+    },
+    {
+      "manifest_file": "reasonseg_phase1_smoke_refcocoplus_attr_manifest.json",
+      "entry_index": 1,
+      "intersection": 55,
+      "union": 100
+    },
+    {
+      "manifest_file": "reasonseg_phase1_smoke_refcocoplus_attr_manifest.json",
+      "entry_index": 2,
+      "intersection": 72,
+      "union": 90
+    },
+    {
+      "manifest_file": "reasonseg_phase1_smoke_refcocoplus_attr_manifest.json",
+      "entry_index": 3,
+      "intersection": 27,
+      "union": 45
+    },
+    {
+      "manifest_file": "reasonseg_phase1_smoke_refcocog_long_manifest.json",
+      "entry_index": 0,
+      "intersection": 65,
+      "union": 100
+    },
+    {
+      "manifest_file": "reasonseg_phase1_smoke_refcocog_long_manifest.json",
+      "entry_index": 1,
+      "intersection": 40,
+      "union": 80
+    },
+    {
+      "manifest_file": "reasonseg_phase1_smoke_refcocog_long_manifest.json",
+      "entry_index": 2,
+      "intersection": 75,
+      "union": 100
+    },
+    {
+      "manifest_file": "reasonseg_phase1_smoke_refcocog_long_manifest.json",
+      "entry_index": 3,
+      "intersection": 36,
+      "union": 60
+    },
+    {
+      "manifest_file": "reasonseg_phase1_smoke_noun_regression_manifest.json",
+      "entry_index": 0,
+      "intersection": 60,
+      "union": 100,
+      "class_partition": "base",
+      "classification_correct": true
+    },
+    {
+      "manifest_file": "reasonseg_phase1_smoke_noun_regression_manifest.json",
+      "entry_index": 1,
+      "predicted_positive_mask_count": 0
+    },
+    {
+      "manifest_file": "reasonseg_phase1_smoke_noun_regression_manifest.json",
+      "entry_index": 2,
+      "intersection": 35,
+      "union": 70,
+      "class_partition": "novel",
+      "classification_correct": false
+    },
+    {
+      "manifest_file": "reasonseg_phase1_smoke_noun_regression_manifest.json",
+      "entry_index": 3,
+      "predicted_positive_mask_count": 2
+    }
+  ]
+}

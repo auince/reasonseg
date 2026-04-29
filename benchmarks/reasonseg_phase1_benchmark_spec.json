@@ -1,0 +1,295 @@
+{
+  "schema_version": "1.0.0",
+  "benchmark_id": "reasonseg_phase1_public_benchmark",
+  "phase": "phase1",
+  "scope": "public_datasets_only",
+  "query_contract": {
+    "ordered_keys": [
+      "target",
+      "attributes",
+      "relations",
+      "actions",
+      "negatives",
+      "exists"
+    ],
+    "alignment_note": "Matches the fixed Task 2 normalized query contract.",
+    "no_target_representation": {
+      "query_struct_target": null,
+      "query_struct_exists": false,
+      "requested_target_field": "requested_target",
+      "required_negative_flag": "absent_object"
+    }
+  },
+  "metric_families": {
+    "openworldsam_grounding": {
+      "primary_metric": "grounding/mIoU",
+      "metric_keys": [
+        "grounding/cIoU",
+        "grounding/mIoU",
+        "grounding/precision@0.5",
+        "grounding/precision@0.6",
+        "grounding/precision@0.7",
+        "grounding/precision@0.8",
+        "grounding/precision@0.9"
+      ],
+      "reference": "reasonseg.evaluation.grounding"
+    },
+    "ovsam_instance_mask_iou": {
+      "primary_metric": "instance/miou",
+      "metric_keys": [
+        "instance/miou",
+        "instance/base_iou",
+        "instance/novel_iou",
+        "instance/score",
+        "instance/base_score",
+        "instance/novel_score"
+      ],
+      "reference": "reasonseg.benchmark_eval"
+    }
+  },
+  "datasets": [
+    {
+      "dataset_id": "refcoco_unc",
+      "display_name": "RefCOCO",
+      "role": "noun_short_expression_baseline",
+      "phase1_required": true,
+      "phase1_default_eval_splits": [
+        "val"
+      ],
+      "official_eval_splits": [
+        "val",
+        "testA",
+        "testB"
+      ],
+      "split_protocol": "official_unc",
+      "public_source": "RefCOCO public annotations on COCO images",
+      "compatible_materialization": "Convert public referring-expression annotations into OpenWorldSAM grounding JSON; keep official UNC split labels unchanged.",
+      "metric_family": "openworldsam_grounding",
+      "class_universe": "coco_80_nouns",
+      "derived_slice_priority": [
+        "noun",
+        "attribute",
+        "relation_action",
+        "no_target"
+      ]
+    },
+    {
+      "dataset_id": "refcoco_plus_unc",
+      "display_name": "RefCOCO+",
+      "role": "attribute_sensitive_expression_slice",
+      "phase1_required": true,
+      "phase1_default_eval_splits": [
+        "val"
+      ],
+      "official_eval_splits": [
+        "val",
+        "testA",
+        "testB"
+      ],
+      "split_protocol": "official_unc",
+      "public_source": "RefCOCO+ public annotations on COCO images",
+      "compatible_materialization": "Use the public RefCOCO+ split labels; preserve the attribute-sensitive expression text without adding synthetic rewrites.",
+      "metric_family": "openworldsam_grounding",
+      "class_universe": "coco_80_nouns",
+      "derived_slice_priority": [
+        "attribute",
+        "noun",
+        "relation_action",
+        "no_target"
+      ]
+    },
+    {
+      "dataset_id": "refcocog_umd",
+      "display_name": "RefCOCOg",
+      "role": "long_compositional_expression_slice",
+      "phase1_required": true,
+      "phase1_default_eval_splits": [
+        "val"
+      ],
+      "official_eval_splits": [
+        "val",
+        "test"
+      ],
+      "split_protocol": "official_umd",
+      "public_source": "RefCOCOg public UMD annotations on COCO images",
+      "compatible_materialization": "Align with the UMD split family already referenced by OpenWorldSAM (`refcocog_val_umd`); do not substitute the Google split in phase 1.",
+      "metric_family": "openworldsam_grounding",
+      "class_universe": "coco_80_nouns",
+      "derived_slice_priority": [
+        "relation_action",
+        "attribute",
+        "noun",
+        "no_target"
+      ]
+    },
+    {
+      "dataset_id": "coco_2017_48_17_ov",
+      "display_name": "COCO 2017 open-vocabulary 48/17 split",
+      "role": "noun_regression",
+      "phase1_required": true,
+      "phase1_default": true,
+      "compatible_alternative_group": "noun_regression_alternatives",
+      "phase1_default_eval_splits": [
+        "val2017"
+      ],
+      "official_eval_splits": [
+        "val2017"
+      ],
+      "split_protocol": "ovsam_compatible_48_17",
+      "public_source": "COCO 2017 instance annotations",
+      "compatible_materialization": "Follow `CocoOVDataset` with `sub_split='48_17'` from OVSAM for base/novel noun-regression retention.",
+      "metric_family": "ovsam_instance_mask_iou",
+      "class_universe": "coco_80_nouns",
+      "derived_slice_priority": [
+        "noun",
+        "no_target"
+      ]
+    },
+    {
+      "dataset_id": "lvis_v1_val_noun_regression_alt",
+      "display_name": "LVIS v1 validation rare-holdout slice",
+      "role": "noun_regression",
+      "phase1_required": false,
+      "phase1_default": false,
+      "phase1_compatible_alternative": true,
+      "compatible_alternative_group": "noun_regression_alternatives",
+      "phase1_default_eval_splits": [
+        "val"
+      ],
+      "official_eval_splits": [
+        "val"
+      ],
+      "split_protocol": "ovsam_compatible_lvis_base_vs_rare",
+      "public_source": "LVIS v1 public annotations",
+      "compatible_materialization": "Follow OVSAM `lvis_norare` training/validation protocol with base-vs-rare reporting keys.",
+      "metric_family": "ovsam_instance_mask_iou",
+      "class_universe": "lvis_v1_categories",
+      "derived_slice_priority": [
+        "noun",
+        "no_target"
+      ]
+    }
+  ],
+  "derived_slices": {
+    "noun": {
+      "description": "Positive noun-only query with no extra compositional constraints.",
+      "minimum_smoke_examples": 50,
+      "rule": {
+        "exists": true,
+        "target": "required_non_null",
+        "attributes_count": 0,
+        "relations_count": 0,
+        "actions_count": 0
+      },
+      "preferred_sources": [
+        "refcoco_unc",
+        "coco_2017_48_17_ov",
+        "lvis_v1_val_noun_regression_alt"
+      ]
+    },
+    "attribute": {
+      "description": "Positive query where attributes carry meaning beyond the noun target.",
+      "minimum_smoke_examples": 50,
+      "rule": {
+        "exists": true,
+        "target": "required_non_null",
+        "attributes_count_min": 1,
+        "relations_count": 0,
+        "actions_count": 0
+      },
+      "preferred_sources": [
+        "refcoco_plus_unc",
+        "refcoco_unc",
+        "refcocog_umd"
+      ]
+    },
+    "relation_action": {
+      "description": "Positive query requiring at least one relation or one action constraint.",
+      "minimum_smoke_examples": 50,
+      "rule": {
+        "exists": true,
+        "target": "required_non_null",
+        "attributes_count_any": true,
+        "relations_or_actions_count_min": 1
+      },
+      "subtypes": [
+        "relation_only",
+        "action_only",
+        "relation_and_action"
+      ],
+      "preferred_sources": [
+        "refcocog_umd",
+        "refcoco_unc",
+        "refcoco_plus_unc"
+      ]
+    },
+    "no_target": {
+      "description": "Negative query paired with an image that does not contain the requested target category.",
+      "minimum_smoke_examples": 50,
+      "rule": {
+        "exists": false,
+        "target": "must_be_null",
+        "requested_target": "required_non_null",
+        "negatives_must_include": [
+          "absent_object"
+        ],
+        "positive_mask_count": 0
+      },
+      "generation": {
+        "allowed_query_source": "Public class-universe nouns only; do not hand-curate private negatives.",
+        "pairing_rule": "For each candidate image, sample a target noun from the same dataset class universe that is absent from the image's public annotations.",
+        "annotation_requirement": "image_category_names must be derivable from the public source annotations for the paired image.",
+        "reproducibility_requirement": "Store source image id, source split, class universe id, requested_target, and normalized image_category_names in the materialized manifest.",
+        "validation_requirement": "A materialized manifest entry is valid only if requested_target is absent from image_category_names and positive_mask_count equals 0."
+      },
+      "preferred_sources": [
+        "refcoco_unc",
+        "refcoco_plus_unc",
+        "refcocog_umd",
+        "coco_2017_48_17_ov",
+        "lvis_v1_val_noun_regression_alt"
+      ]
+    }
+  },
+  "smoke_eval_policy": {
+    "minimum_examples_per_slice": 50,
+    "allow_cross_dataset_aggregation": true,
+    "required_slice_set": [
+      "noun",
+      "attribute",
+      "relation_action",
+      "no_target"
+    ],
+    "phase1_default_dataset_order": [
+      "refcoco_unc",
+      "refcoco_plus_unc",
+      "refcocog_umd",
+      "coco_2017_48_17_ov"
+    ]
+  },
+  "materialized_manifest_contract": {
+    "required_root_fields": [
+      "manifest_kind",
+      "benchmark_spec_version",
+      "entries"
+    ],
+    "required_entry_fields": [
+      "dataset_id",
+      "dataset_role",
+      "split",
+      "image_id",
+      "query_text",
+      "query_struct",
+      "requested_target",
+      "slice_tags",
+      "image_category_names",
+      "positive_mask_count",
+      "source_annotation_ids"
+    ],
+    "entry_notes": [
+      "requested_target equals query_struct.target for positive slices.",
+      "requested_target stays non-null for no_target slices even though query_struct.target is null.",
+      "slice_tags may include a subtype tag in addition to the four canonical slices."
+    ]
+  }
+}

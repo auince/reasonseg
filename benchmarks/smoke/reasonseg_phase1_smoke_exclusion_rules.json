@@ -1,0 +1,58 @@
+{
+  "manifest_kind": "reasonseg_phase1_smoke_exclusion_rules",
+  "benchmark_spec_version": "1.0.0",
+  "rules": [
+    {
+      "subset_id": "refcoco_short",
+      "dataset_id": "refcoco_unc",
+      "manifest_file": "reasonseg_phase1_smoke_refcoco_short_manifest.json",
+      "train_splits": [
+        "train"
+      ],
+      "eval_splits": [
+        "val"
+      ],
+      "overlap_policy": "forbid_shared_image_ids",
+      "leakage_key": "image_id"
+    },
+    {
+      "subset_id": "refcocoplus_attr",
+      "dataset_id": "refcoco_plus_unc",
+      "manifest_file": "reasonseg_phase1_smoke_refcocoplus_attr_manifest.json",
+      "train_splits": [
+        "train"
+      ],
+      "eval_splits": [
+        "val"
+      ],
+      "overlap_policy": "forbid_shared_image_ids",
+      "leakage_key": "image_id"
+    },
+    {
+      "subset_id": "refcocog_long",
+      "dataset_id": "refcocog_umd",
+      "manifest_file": "reasonseg_phase1_smoke_refcocog_long_manifest.json",
+      "train_splits": [
+        "train"
+      ],
+      "eval_splits": [
+        "val"
+      ],
+      "overlap_policy": "forbid_shared_image_ids",
+      "leakage_key": "image_id"
+    },
+    {
+      "subset_id": "noun_regression",
+      "dataset_id": "coco_2017_48_17_ov",
+      "manifest_file": "reasonseg_phase1_smoke_noun_regression_manifest.json",
+      "train_splits": [
+        "train2017"
+      ],
+      "eval_splits": [
+        "val2017"
+      ],
+      "overlap_policy": "forbid_shared_image_ids",
+      "leakage_key": "image_id"
+    }
+  ]
+}

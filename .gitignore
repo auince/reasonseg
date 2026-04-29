@@ -1,0 +1,15 @@
+dataset/
+data/
+checkpoints/
+models/evf-sam2-multitask/model.safetensors
+outputs/
+*.zip
+*.tar.gz
+*.pt
+*.pth
+__pycache__/
+*.pyc
+.ruff_cache/
+detectron2-main/
+.idea/
+*.egg-info/

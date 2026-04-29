@@ -1,0 +1,16 @@
+_BASE_: Open-World-SAM2-CrossAttention.yaml
+
+MODEL:
+  OpenWorldSAM2:
+    REASONSEG_ENABLED: True
+    HF_LOCAL_FILES_ONLY: True
+    LOCAL_EVF_CONFIG: "checkpoints/evf-sam2-multitask"
+    LOCAL_TOKENIZER_CONFIG: "checkpoints/evf-sam2-multitask"
+    query_parser_type: "deterministic"
+    composition_mode: "composed_prompt"
+    no_target_threshold: 0.0
+    LIGHTWEIGHT_ADAPTER:
+      ENABLED: False
+      HIDDEN_DIM: 256
+      DROPOUT: 0.0
+      SCALE: 1.0

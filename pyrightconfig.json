@@ -1,0 +1,20 @@
+{
+  "include": [
+    "reasonseg",
+    "scripts",
+    "tests",
+    "model"
+  ],
+  "exclude": [
+    "model/segment_anything_2/**/*",
+    "model/unilm/**/*"
+  ],
+  "executionEnvironments": [
+    {
+      "root": ".",
+      "extraPaths": [
+        "."
+      ]
+    }
+  ]
+}

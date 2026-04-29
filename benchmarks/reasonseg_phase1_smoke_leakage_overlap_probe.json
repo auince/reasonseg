@@ -1,0 +1,13 @@
+{
+  "probe_id": "reasonseg_phase1_smoke_overlap_probe",
+  "train_image_ids": [
+    102456,
+    110245,
+    120553
+  ],
+  "eval_image_ids": [
+    120553,
+    210763,
+    230472
+  ]
+}

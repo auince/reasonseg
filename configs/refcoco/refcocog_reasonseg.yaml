@@ -1,0 +1,5 @@
+_BASE_: refcoco_reasonseg.yaml
+
+DATASETS:
+  TRAIN: ("refcocog_train_umd",)
+  TEST: ("refcocog_val_umd",)
