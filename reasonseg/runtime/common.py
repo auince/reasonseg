@@ -22,7 +22,13 @@ PREDICTIONS_NAME = "predictions.json"
 METRICS_NAME = "metrics.json"
 
 
+_runtime_deps: dict[str, Any] | None = None
+
+
 def _import_runtime_deps() -> dict[str, Any]:
+    global _runtime_deps
+    if _runtime_deps is not None:
+        return _runtime_deps
     from detectron2.checkpoint import DetectionCheckpointer
     from detectron2.config import get_cfg
     from detectron2.data import (
@@ -37,7 +43,7 @@ def _import_runtime_deps() -> dict[str, Any]:
     from detectron2.utils.env import seed_all_rng
     from detectron2.utils.logger import setup_logger
 
-    return {
+    _runtime_deps = {
         "DetectionCheckpointer": DetectionCheckpointer,
         "build_detection_test_loader": build_detection_test_loader,
         "build_detection_train_loader": build_detection_train_loader,
@@ -52,6 +58,7 @@ def _import_runtime_deps() -> dict[str, Any]:
         "seed_all_rng": seed_all_rng,
         "setup_logger": setup_logger,
     }
+    return _runtime_deps
 
 
 def get_output_dir(args: argparse.Namespace) -> Path:

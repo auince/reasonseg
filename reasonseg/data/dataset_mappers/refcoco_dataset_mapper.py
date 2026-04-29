@@ -28,6 +28,11 @@ from ...modeling.prompting import (
     infer_slice_tag,
 )
 
+_SAM_PIXEL_MEAN = torch.tensor([123.675, 116.28, 103.53]).view(-1, 1, 1)
+_SAM_PIXEL_STD = torch.tensor([58.395, 57.12, 57.375]).view(-1, 1, 1)
+_SAM_IMG_SIZE = 1024
+_BEIT_IMG_SIZE = 224
+
 __all__ = ["RefCOCODatasetMapper"]
 
 
@@ -56,27 +61,22 @@ def filter_empty_instances_by_box(
 
 
 def sam_preprocess(x: np.ndarray) -> torch.Tensor:
-    pixel_mean = torch.tensor([123.675, 116.28, 103.53]).view(-1, 1, 1)
-    pixel_std = torch.tensor([58.395, 57.12, 57.375]).view(-1, 1, 1)
-    img_size = 1024
-
     x_tensor = torch.as_tensor(np.ascontiguousarray(x.transpose(2, 0, 1)))
     x_tensor = F.interpolate(
         x_tensor.unsqueeze(0),
-        (img_size, img_size),
+        (_SAM_IMG_SIZE, _SAM_IMG_SIZE),
         mode="bilinear",
         align_corners=False,
     ).squeeze(0)
-    return (x_tensor - pixel_mean) / pixel_std
+    return (x_tensor - _SAM_PIXEL_MEAN) / _SAM_PIXEL_STD
 
 
 def beit3_preprocess(x: np.ndarray) -> torch.Tensor:
-    img_size = 224
     beit_preprocess = transforms.Compose(
         [
             transforms.ToTensor(),
             transforms.Resize(
-                (img_size, img_size),
+                (_BEIT_IMG_SIZE, _BEIT_IMG_SIZE),
                 interpolation=InterpolationMode.BICUBIC,
                 antialias=False,
             ),
