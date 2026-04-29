@@ -1,6 +1,8 @@
 import pytest
 from typing import TypedDict
 
+from reasonseg.query import parse_query
+
 
 class RelationEntry(TypedDict):
     type: str
@@ -254,9 +256,8 @@ def test_all_cases_expose_the_expected_schema(
 def test_golden_normalized_queries(
     query: str,
     expected: NormalizedQuery,
-    normalized_query_cases: list[QueryCase],
 ) -> None:
-    actual = {case["query"]: case["expected"] for case in normalized_query_cases}[query]
+    actual = parse_query(query)
     assert actual == expected
 
 
