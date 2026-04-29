@@ -154,7 +154,7 @@ class GroundingEvaluator(DatasetEvaluator):
     def process(self, inputs, outputs) -> None:
         for input_entry, output_entry in zip(inputs, outputs):
             predicted_masks = (
-                (output_entry["grounding_mask"].sigmoid() > 0.5).detach().cpu()
+                (output_entry["grounding_mask"].sigmoid() > 0.5).cpu()
             )
             predicted_scores = output_entry.get("grounding_scores")
             gt_masks = input_entry["groundings"]["masks"].bool()

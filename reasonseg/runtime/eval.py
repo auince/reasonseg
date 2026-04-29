@@ -190,7 +190,7 @@ def run_evaluation(
                 evaluator.process(inputs, outputs)
                 if len(vis_samples) < 20:
                     for inp, out in zip(inputs, outputs):
-                        pred_masks = (out["grounding_mask"].sigmoid() > 0.5).detach().cpu().numpy()
+                        pred_masks = (out["grounding_mask"].sigmoid() > 0.5).cpu().numpy()
                         gt_masks = inp["groundings"]["masks"].bool().numpy()
                         for p_idx, (pm, gm) in enumerate(zip(pred_masks, gt_masks)):
                             if len(vis_samples) >= 20:
@@ -216,6 +216,11 @@ def run_evaluation(
             model.train()
         del loader
         del evaluator
+        import gc
+        gc.collect()
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+            torch.cuda.ipc_collect()
 
     if results is None:
         return {}

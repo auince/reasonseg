@@ -184,7 +184,7 @@ class SetCriterion(nn.Module):
         )
         if reduce_num_masks and is_dist_avail_and_initialized():
             torch.distributed.all_reduce(num_masks)
-        num_masks = torch.clamp(num_masks / get_world_size(), min=1).item()
+        num_masks = torch.clamp(num_masks / get_world_size(), min=1)
 
         losses = {}
         for loss_name in self.losses:

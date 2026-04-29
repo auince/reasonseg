@@ -165,7 +165,7 @@ class RefCOCODatasetMapper:
         ]
 
     def __call__(self, dataset_dict):
-        dataset_dict = copy.deepcopy(dataset_dict)
+        dataset_dict = {**dataset_dict}
         image = utils.read_image(dataset_dict["file_name"], format=self.img_format)
         utils.check_image_size(dataset_dict, image)
         image_shape = image.shape[:2]
