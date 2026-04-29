@@ -915,9 +915,7 @@ def test_launch_train_main_uses_external_distributed_context_without_detectron2_
         "_import_runtime_deps",
         lambda: {
             "comm": SimpleNamespace(
-                get_local_rank=lambda: (_ for _ in ()).throw(
-                    AssertionError("missing local process group")
-                ),
+                get_local_size=lambda: 0,
                 create_local_process_group=lambda size: seen["events"].append(
                     ("create_local_process_group", size)
                 ),

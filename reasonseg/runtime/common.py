@@ -324,9 +324,7 @@ def run_with_external_distributed_context(
 
     try:
         if world_size > 1:
-            try:
-                deps["comm"].get_local_rank()
-            except AssertionError:
+            if deps["comm"].get_local_size() == 0:
                 deps["comm"].create_local_process_group(local_world_size)
 
         if has_gpu:
