@@ -1,8 +1,8 @@
-dataset/
-data/
-checkpoints/
-models/evf-sam2-multitask/model.safetensors
-outputs/
+/dataset/
+/data/
+/checkpoints/
+/models/evf-sam2-multitask/model.safetensors
+/outputs/
 *.zip
 *.tar.gz
 *.pt
