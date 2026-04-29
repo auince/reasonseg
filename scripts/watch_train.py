@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import logging
 import os
 import signal
 import subprocess
@@ -338,7 +339,8 @@ def run_watchdog(args: WatchdogArgs) -> int:
         try:
             gpu_samples = _sample_gpus(gpu_indices)
             last_gpu_samples = gpu_samples
-        except Exception:
+        except (subprocess.SubprocessError, ValueError) as exc:
+            logging.getLogger(__name__).warning("GPU sampling failed: %s", exc)
             gpu_samples = []
 
         elapsed = current_time - start_time
