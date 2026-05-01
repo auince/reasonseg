@@ -15,10 +15,90 @@ CANONICAL_QUERY_KEYS = (
     "exists",
 )
 
-_RELATION_WORDS = {"behind", "on", "with"}
-_ATTRIBUTE_WORDS = {"red", "wooden", "small", "blue"}
-_ACTION_TARGETS = {"watering"}
-_ACTION_STANDALONE = {"running"}
+_RELATION_WORDS = {
+    "behind",
+    "on",
+    "with",
+    # spatial (single-word from synthetic_queries.py)
+    "under",
+    "beside",
+    "above",
+    "below",
+    "inside",
+    "outside",
+    "near",
+    "against",
+    "atop",
+    "between",
+}
+_ATTRIBUTE_WORDS = {
+    # colors
+    "red",
+    "blue",
+    "green",
+    "yellow",
+    "black",
+    "white",
+    "orange",
+    "purple",
+    "pink",
+    "brown",
+    "gray",
+    # size / shape
+    "small",
+    "large",
+    "big",
+    "tiny",
+    "tall",
+    "short",
+    "wide",
+    "narrow",
+    # material
+    "wooden",
+    "metal",
+    "plastic",
+    "glass",
+    "ceramic",
+    "leather",
+    "fabric",
+    # shape / pattern
+    "round",
+    "square",
+    "rectangular",
+    "flat",
+    "striped",
+    "checked",
+    "dotted",
+    "patterned",
+    # descriptors
+    "shiny",
+    "dark",
+    "light",
+    "bright",
+    "pale",
+}
+_ACTION_TARGETS = {
+    "watering",
+    # transitive single-word from synthetic_queries.py
+    "holding",
+    "carrying",
+    "eating",
+    "drinking",
+    "riding",
+    "driving",
+    "wearing",
+    "touching",
+    "pushing",
+    "pulling",
+    "covering",
+}
+_ACTION_STANDALONE = {
+    "running",
+    "standing",
+    "sitting",
+    "walking",
+    "smiling",
+}
 _ABSENT_PREFIXES = {"no", "without", "absent"}
 _PRONOUN_TARGETS = {"it", "they", "them", "this", "that", "these", "those"}
 _LEADING_ARTICLES = {"the", "a", "an"}

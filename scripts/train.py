@@ -7,6 +7,11 @@ import sys
 from types import ModuleType
 from typing import Callable, cast
 
+# Ensure repo root is on sys.path so model.* imports work
+_REPO_ROOT = Path(__file__).resolve().parents[1]
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
+
 
 def _load_cli_surface() -> ModuleType:
     _ensure_reasonseg_package_loaded()

@@ -1,0 +1,5 @@
+_BASE_: "refcoco_vr_ov.yaml"
+
+DATASETS:
+  TRAIN: ("refcoco_plus_train_unc",)
+  TEST: ("refcoco_plus_val_unc",)

@@ -1,0 +1,42 @@
+_BASE_: "vr_ov_base.yaml"
+
+MODEL:
+  META_ARCHITECTURE: "VR_OV"
+  OpenWorldSAM2:
+    HF_LOCAL_FILES_ONLY: true
+    LOCAL_EVF_CONFIG: "models/evf-sam2-multitask"
+    LOCAL_TOKENIZER_CONFIG: "models/evf-sam2-multitask"
+  VR_OV:
+    ENABLED: true
+    QUERY_PARSER:
+      ENABLED: true
+      GNN_LAYERS: 2
+      GNN_HEADS: 4
+      CHECKPOINT: "model/BIOtagging/outputs/stage1_fast_train50k_plus_mask20k_plus_flashpro2k_20260430_031500/parser_head_best.pt"
+      OUT_DIM: 256
+    SCENE_GRAPH:
+      ENABLED: true
+      HOI_TOKENS: 5
+      REGION_TOPK: 64
+    COMP_MATCHER:
+      ENABLED: true
+      CMF_LAYERS: 3
+    REFINE_DECODER:
+      ENABLED: true
+      MAX_ITER: 3
+
+SOLVER:
+  MAX_ITER: 190000
+  BASE_LR: 0.0001
+  IMS_PER_BATCH: 2
+  CHECKPOINT_PERIOD: 5000
+
+TEST:
+  EVAL_PERIOD: 5000
+
+DATASETS:
+  TRAIN: ("refcoco_train_unc",)
+  TEST: ("refcoco_val_unc",)
+
+DATALOADER:
+  NUM_WORKERS: 8

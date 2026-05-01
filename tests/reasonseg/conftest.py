@@ -135,5 +135,92 @@ def normalized_query_cases() -> list[QueryCase]:
             negatives=["malformed_query"],
             exists=False,
         ),
+        # --- expanded-attribute cases ---
+        _case(
+            "attribute_green_apple",
+            "green apple",
+            target="apple",
+            attributes=["green"],
+            exists=True,
+        ),
+        _case(
+            "attribute_metal_spoon",
+            "metal spoon",
+            target="spoon",
+            attributes=["metal"],
+            exists=True,
+        ),
+        _case(
+            "attribute_large_pizza",
+            "large pizza",
+            target="pizza",
+            attributes=["large"],
+            exists=True,
+        ),
+        _case(
+            "attribute_striped_tall_person",
+            "striped tall person",
+            target="person",
+            attributes=["striped", "tall"],
+            exists=True,
+        ),
+        _case(
+            "attribute_dark_wooden_desk",
+            "dark wooden desk",
+            target="desk",
+            attributes=["dark", "wooden"],
+            exists=True,
+        ),
+        # --- expanded-relation cases ---
+        _case(
+            "relation_dog_under_table",
+            "dog under table",
+            target="dog",
+            relations=[{"type": "under", "target": "table"}],
+            exists=True,
+        ),
+        _case(
+            "relation_cat_beside_chair",
+            "cat beside chair",
+            target="cat",
+            relations=[{"type": "beside", "target": "chair"}],
+            exists=True,
+        ),
+        _case(
+            "relation_bird_above_tree",
+            "bird above tree",
+            target="bird",
+            relations=[{"type": "above", "target": "tree"}],
+            exists=True,
+        ),
+        _case(
+            "relation_cup_near_plate",
+            "cup near plate",
+            target="cup",
+            relations=[{"type": "near", "target": "plate"}],
+            exists=True,
+        ),
+        # --- expanded-action cases ---
+        _case(
+            "action_man_holding_phone",
+            "man holding phone",
+            target="man",
+            actions=[{"verb": "holding", "target": "phone"}],
+            exists=True,
+        ),
+        _case(
+            "action_woman_wearing_hat",
+            "woman wearing hat",
+            target="woman",
+            actions=[{"verb": "wearing", "target": "hat"}],
+            exists=True,
+        ),
+        _case(
+            "action_person_sitting",
+            "person sitting",
+            target="person",
+            actions=[{"verb": "sitting", "target": None}],
+            exists=True,
+        ),
     ]
     return copy.deepcopy(cases)

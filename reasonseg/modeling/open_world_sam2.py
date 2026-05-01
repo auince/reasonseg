@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from collections import defaultdict
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
@@ -27,6 +27,7 @@ from .evf_sam2 import EvfSam2Model
 from .matcher import HungarianMatcher
 from .mlp import MLP
 from .prompting import compose_reasonseg_prompt
+# CompositionScores is imported lazily inside __init__() to avoid module-level dependency
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 
@@ -63,6 +64,263 @@ def _load_tokenizer(
         ) from exc
 
 
+def _resolve_torch_dtype(precision: str) -> torch.dtype:
+    if precision == "bf16":
+        return torch.bfloat16
+    if precision == "fp16":
+        return torch.half
+    return torch.float32
+
+
+def _build_open_world_sam2_common_kwargs(
+    cfg,
+) -> tuple[dict[str, Any], int]:
+    torch_dtype = _resolve_torch_dtype(cfg.MODEL.OpenWorldSAM2.TORCH_DTYPE)
+    kwargs: dict[str, Any] = {
+        "torch_dtype": torch_dtype,
+        "train_mask_decoder": cfg.MODEL.OpenWorldSAM2.TRAIN_MASK_DECODER,
+        "train_prompt_encoder": cfg.MODEL.OpenWorldSAM2.TRAIN_PROMPT_ENCODER,
+        "vision_pretrained": _resolve_local_asset_path(
+            cfg.MODEL.OpenWorldSAM2.VISION_PRETRAINED
+        ),
+        "encoder_pretrained": _resolve_local_asset_path(
+            cfg.MODEL.OpenWorldSAM2.ENCODER_PRETRAINED
+        ),
+    }
+    local_files_only = cfg.MODEL.OpenWorldSAM2.HF_LOCAL_FILES_ONLY
+
+    tokenizer = _load_tokenizer(
+        cfg.MODEL.OpenWorldSAM2.TOKENIZER_CONFIG,
+        cfg.MODEL.OpenWorldSAM2.LOCAL_TOKENIZER_CONFIG,
+        local_files_only=local_files_only,
+    )
+    evf_model_source = _resolve_pretrained_source(
+        cfg.MODEL.OpenWorldSAM2.EVF_CONFIG,
+        cfg.MODEL.OpenWorldSAM2.LOCAL_EVF_CONFIG,
+    )
+    try:
+        evf_sam2 = EvfSam2Model.from_pretrained(
+            evf_model_source,
+            low_cpu_mem_usage=False,
+            local_files_only=local_files_only,
+            **kwargs,
+        )
+    except OSError as exc:
+        raise RuntimeError(
+            "Failed to load OpenWorldSAM2 EVF-SAM2 weights from "
+            f"'{evf_model_source}'. Set MODEL.OpenWorldSAM2.LOCAL_EVF_CONFIG "
+            "to a local directory or disable MODEL.OpenWorldSAM2.HF_LOCAL_FILES_ONLY."
+        ) from exc
+
+    evf_sam2.config.eos_token_id = tokenizer.eos_token_id
+    evf_sam2.config.bos_token_id = tokenizer.bos_token_id
+    evf_sam2.config.pad_token_id = tokenizer.pad_token_id
+    visual_model = evf_sam2.visual_model
+    mm_extractor = evf_sam2.mm_extractor
+    for param in mm_extractor.parameters():
+        param.requires_grad = bool(cfg.MODEL.OpenWorldSAM2.TRAIN_VLM)
+    text_hidden_fcs = evf_sam2.text_hidden_fcs
+    for param in text_hidden_fcs.parameters():
+        param.requires_grad = True
+
+    query_dim = cfg.MODEL.OpenWorldSAM2.QUERY_DIM
+    num_tokens = cfg.MODEL.OpenWorldSAM2.NUM_OBJECT_QUERIES
+    positional_tokens = nn.Parameter(torch.randn(num_tokens, query_dim))
+    positional_tokens.requires_grad = bool(cfg.MODEL.OpenWorldSAM2.TRAIN_TIE_BREAKER)
+
+    no_object_weight = cfg.MODEL.OpenWorldSAM2.NO_OBJECT_WEIGHT
+    dice_weight = cfg.MODEL.OpenWorldSAM2.DICE_WEIGHT
+    mask_weight = cfg.MODEL.OpenWorldSAM2.MASK_WEIGHT
+    objectness_weight = cfg.MODEL.OpenWorldSAM2.OBJECTNESS_WEIGHT
+    use_cross_attention = getattr(
+        cfg.MODEL.OpenWorldSAM2,
+        "USE_CROSS_ATTENTION",
+        False,
+    )
+    two_stage_inference = getattr(
+        cfg.MODEL.OpenWorldSAM2.TEST,
+        "TWO_STAGE_INFERENCE",
+        False,
+    )
+    refer_on = getattr(cfg.MODEL.OpenWorldSAM2.TEST, "REFER_ON", False)
+
+    matcher = HungarianMatcher(
+        cost_class=objectness_weight,
+        cost_mask=mask_weight,
+        cost_dice=dice_weight,
+    )
+    criterion = SetCriterion(
+        num_classes=1,
+        matcher=matcher,
+        weight_dict={
+            "loss_ce": objectness_weight,
+            "loss_mask": mask_weight,
+            "loss_dice": dice_weight,
+        },
+        eos_coef=no_object_weight,
+        losses=["labels", "masks"],
+    )
+
+    train_datasets = getattr(cfg.DATASETS, "TRAIN", [])
+    dataset_name = train_datasets[0] if train_datasets else "reasonseg_runtime"
+    return {
+        "evf_sam2": evf_sam2,
+        "tokenizer": tokenizer,
+        "visual_model": visual_model,
+        "mm_extractor": mm_extractor,
+        "text_hidden_fcs": text_hidden_fcs,
+        "query_dim": query_dim,
+        "num_tokens": num_tokens,
+        "positional_tokens": positional_tokens,
+        "criterion": criterion,
+        "pixel_mean": cfg.MODEL.PIXEL_MEAN,
+        "pixel_std": cfg.MODEL.PIXEL_STD,
+        "dtype": torch_dtype,
+        "semantic_on": cfg.MODEL.OpenWorldSAM2.TEST.SEMANTIC_ON,
+        "instance_on": cfg.MODEL.OpenWorldSAM2.TEST.INSTANCE_ON,
+        "panoptic_on": cfg.MODEL.OpenWorldSAM2.TEST.PANOPTIC_ON,
+        "reasonseg_enabled": cfg.MODEL.OpenWorldSAM2.REASONSEG_ENABLED,
+        "composition_mode": cfg.MODEL.OpenWorldSAM2.composition_mode,
+        "top_k_on": cfg.MODEL.OpenWorldSAM2.TEST.TOP_K_ON,
+        "nms_on": cfg.MODEL.OpenWorldSAM2.TEST.NMS_ON,
+        "test_topk_per_image": cfg.MODEL.OpenWorldSAM2.TEST.DETECTIONS_PER_IMAGE,
+        "nms_threshold": cfg.MODEL.OpenWorldSAM2.TEST.NMS_THRESHOLD,
+        "iou_threshold": cfg.MODEL.OpenWorldSAM2.TEST.IOU_THRESHOLD,
+        "sam_iou": cfg.MODEL.OpenWorldSAM2.SAM_IOU,
+        "use_visual_tokens": cfg.MODEL.OpenWorldSAM2.USE_VISUAL_TOKENS,
+        "use_cross_attention": use_cross_attention,
+        "cross_attention_layers": cfg.MODEL.OpenWorldSAM2.CROSS_ATTENTION_LAYERS,
+        "two_stage_inference": two_stage_inference,
+        "refer_on": refer_on,
+        "metadata": MetadataCatalog.get(dataset_name),
+    }, int(evf_sam2.config.hidden_size)
+
+
+def _build_open_world_sam2_parser_kwargs(cfg) -> dict[str, Any]:
+    learned_parser_enabled = getattr(
+        cfg.MODEL.OpenWorldSAM2.LEARNED_PARSER, "ENABLED", False
+    )
+    parser_head: nn.Module | None = None
+    if learned_parser_enabled:
+        import sys
+        from pathlib import Path as _Path
+
+        _bioroot = _Path(__file__).resolve().parents[2] / "model" / "BIOtagging"
+        if str(_bioroot) not in sys.path:
+            sys.path.insert(0, str(_bioroot.parent.parent))
+        from model.BIOtagging.query_parser_head import QueryParserHead
+
+        parser_head = QueryParserHead(
+            hidden_dim=cfg.MODEL.OpenWorldSAM2.LEARNED_PARSER.HIDDEN_DIM,
+            num_tags=14,
+            num_layers=cfg.MODEL.OpenWorldSAM2.LEARNED_PARSER.NUM_LAYERS,
+            nhead=8,
+            dim_feedforward=1024,
+            dropout=cfg.MODEL.OpenWorldSAM2.LEARNED_PARSER.DROPOUT,
+        )
+        ckpt = cfg.MODEL.OpenWorldSAM2.LEARNED_PARSER.CHECKPOINT
+        if ckpt:
+            state = torch.load(ckpt, map_location="cpu", weights_only=True)
+            parser_head.load_state_dict(state)
+            print(f"Loaded parser_head checkpoint: {ckpt}")
+
+    return {
+        "learned_parser_enabled": learned_parser_enabled,
+        "parser_head": parser_head,
+    }
+
+
+def _build_vr_ov_module_kwargs(cfg, *, evf_hidden_size: int) -> dict[str, Any]:
+    vr_ov_query_parser: nn.Module | None = None
+    if cfg.MODEL.VR_OV.QUERY_PARSER.ENABLED:
+        from model.query_parser import BIOQueryParser
+
+        parser_gnn_hidden = int(cfg.MODEL.VR_OV.QUERY_PARSER.HIDDEN_DIM)
+        parser_out_dim = int(cfg.MODEL.VR_OV.QUERY_PARSER.OUT_DIM)
+        parser_ckpt = getattr(cfg.MODEL.VR_OV.QUERY_PARSER, "CHECKPOINT", "")
+        vr_ov_query_parser = BIOQueryParser(
+            parser_checkpoint=parser_ckpt if parser_ckpt else None,
+            hidden_dim=evf_hidden_size,
+            num_layers=int(cfg.MODEL.VR_OV.QUERY_PARSER.GNN_LAYERS),
+            nhead=int(cfg.MODEL.VR_OV.QUERY_PARSER.GNN_HEADS),
+            gnn_hidden=parser_gnn_hidden,
+            gnn_out=parser_out_dim,
+        )
+        print("VR-OV: BIOQueryParser loaded")
+
+    vr_ov_scene_graph: nn.Module | None = None
+    if cfg.MODEL.VR_OV.SCENE_GRAPH.ENABLED:
+        from model.scene_graph_encoder import SceneGraphVisualEncoder
+
+        vr_ov_scene_graph = SceneGraphVisualEncoder(
+            hidden_dim=int(cfg.MODEL.VR_OV.SCENE_GRAPH.HIDDEN_DIM),
+            num_hoi_tokens=int(cfg.MODEL.VR_OV.SCENE_GRAPH.HOI_TOKENS),
+            region_topk=int(cfg.MODEL.VR_OV.SCENE_GRAPH.REGION_TOPK),
+        )
+        print("VR-OV: SceneGraphVisualEncoder loaded")
+
+    vr_ov_refine_decoder: nn.Module | None = None
+    if cfg.MODEL.VR_OV.REFINE_DECODER.ENABLED:
+        from model.refinement_decoder import IterativeRefinementDecoder
+
+        max_iter = getattr(cfg.MODEL.VR_OV.REFINE_DECODER, "MAX_ITER", 3)
+        vr_ov_refine_decoder = IterativeRefinementDecoder(
+            hidden_dim=256,
+            max_iter=max_iter,
+        )
+        vr_ov_refine_decoder.attr_threshold.data.fill_(
+            float(cfg.MODEL.VR_OV.REFINE_DECODER.ATTR_THRESHOLD)
+        )
+        print("VR-OV: IterativeRefinementDecoder loaded")
+
+    vr_ov_comp_matcher: nn.Module | None = None
+    if cfg.MODEL.VR_OV.COMP_MATCHER.ENABLED:
+        from model.compositional_matcher import CompositionalFeatureMatcher
+
+        vr_ov_comp_matcher = CompositionalFeatureMatcher(
+            hidden_dim=int(cfg.MODEL.VR_OV.COMP_MATCHER.HIDDEN_DIM),
+            cmf_layers=int(cfg.MODEL.VR_OV.COMP_MATCHER.CMF_LAYERS),
+        )
+        print("VR-OV: CompositionalFeatureMatcher loaded")
+
+    from model.vr_ov_losses import VR_OVLosses
+
+    vr_ov_losses = None
+    vr_ov_loss_config = None
+    if cfg.MODEL.VR_OV.ENABLED:
+        loss_cfg = getattr(cfg.MODEL.VR_OV, "LOSS", None)
+        if loss_cfg is not None:
+            vr_ov_loss_config = {
+                "mask_enabled": bool(getattr(loss_cfg, "MASK_ENABLED", True)),
+                "attr_enabled": bool(getattr(loss_cfg, "ATTR_ENABLED", False)),
+                "rel_enabled": bool(getattr(loss_cfg, "REL_ENABLED", False)),
+                "act_enabled": bool(getattr(loss_cfg, "ACT_ENABLED", False)),
+                "compose_enabled": bool(getattr(loss_cfg, "COMPOSE_ENABLED", False)),
+                "lambda_mask": float(getattr(loss_cfg, "LAMBDA_MASK", 5.0)),
+                "lambda_attr": float(getattr(loss_cfg, "LAMBDA_ATTR", 1.0)),
+                "lambda_rel": float(getattr(loss_cfg, "LAMBDA_REL", 0.5)),
+                "lambda_act": float(getattr(loss_cfg, "LAMBDA_ACT", 0.5)),
+                "lambda_compose": float(getattr(loss_cfg, "LAMBDA_COMPOSE", 0.3)),
+            }
+            if vr_ov_loss_config["mask_enabled"]:
+                vr_ov_losses = VR_OVLosses(
+                    lambda_mask=vr_ov_loss_config["lambda_mask"],
+                    lambda_attr=vr_ov_loss_config["lambda_attr"],
+                    lambda_rel=vr_ov_loss_config["lambda_rel"],
+                    lambda_act=vr_ov_loss_config["lambda_act"],
+                    lambda_compose=vr_ov_loss_config["lambda_compose"],
+                )
+
+    return {
+        "vr_ov_query_parser": vr_ov_query_parser,
+        "vr_ov_scene_graph": vr_ov_scene_graph,
+        "vr_ov_comp_matcher": vr_ov_comp_matcher,
+        "vr_ov_refine_decoder": vr_ov_refine_decoder,
+        "vr_ov_losses": vr_ov_losses,
+        "vr_ov_loss_config": vr_ov_loss_config,
+    }
+
+
 @META_ARCH_REGISTRY.register()
 class OpenWorldSAM2(nn.Module):
     @configurable
@@ -91,6 +349,14 @@ class OpenWorldSAM2(nn.Module):
         panoptic_on: bool,
         sam_iou: bool,
         reasonseg_enabled: bool = False,
+        learned_parser_enabled: bool = False,
+        parser_head: nn.Module | None = None,
+        vr_ov_query_parser: nn.Module | None = None,
+        vr_ov_scene_graph: nn.Module | None = None,
+        vr_ov_refine_decoder: nn.Module | None = None,
+        vr_ov_comp_matcher: nn.Module | None = None,
+        vr_ov_losses: nn.Module | None = None,
+        vr_ov_loss_config: dict[str, Any] | None = None,
         composition_mode: str = "composed_prompt",
         use_visual_tokens: bool = True,
         use_cross_attention: bool = False,
@@ -147,6 +413,14 @@ class OpenWorldSAM2(nn.Module):
         self.panoptic_on = panoptic_on
         self.sam_iou = sam_iou
         self.reasonseg_enabled = reasonseg_enabled
+        self.learned_parser_enabled = learned_parser_enabled
+        self.parser_head = parser_head
+        self.vr_ov_query_parser = vr_ov_query_parser
+        self.vr_ov_scene_graph = vr_ov_scene_graph
+        self.vr_ov_refine_decoder = vr_ov_refine_decoder
+        self.vr_ov_comp_matcher = vr_ov_comp_matcher
+        self.vr_ov_losses = vr_ov_losses
+        self.vr_ov_loss_config = vr_ov_loss_config
         self.composition_mode = composition_mode
         self.top_k_on = top_k_on
         self.nms_on = nms_on
@@ -157,133 +431,9 @@ class OpenWorldSAM2(nn.Module):
 
     @classmethod
     def from_config(cls, cfg):
-        precision = cfg.MODEL.OpenWorldSAM2.TORCH_DTYPE
-        torch_dtype = torch.float32
-        if precision == "bf16":
-            torch_dtype = torch.bfloat16
-        elif precision == "fp16":
-            torch_dtype = torch.half
-
-        kwargs: dict[str, Any] = {
-            "torch_dtype": torch_dtype,
-            "train_mask_decoder": cfg.MODEL.OpenWorldSAM2.TRAIN_MASK_DECODER,
-            "train_prompt_encoder": cfg.MODEL.OpenWorldSAM2.TRAIN_PROMPT_ENCODER,
-            "vision_pretrained": _resolve_local_asset_path(
-                cfg.MODEL.OpenWorldSAM2.VISION_PRETRAINED
-            ),
-            "encoder_pretrained": _resolve_local_asset_path(
-                cfg.MODEL.OpenWorldSAM2.ENCODER_PRETRAINED
-            ),
-        }
-        local_files_only = cfg.MODEL.OpenWorldSAM2.HF_LOCAL_FILES_ONLY
-
-        tokenizer = _load_tokenizer(
-            cfg.MODEL.OpenWorldSAM2.TOKENIZER_CONFIG,
-            cfg.MODEL.OpenWorldSAM2.LOCAL_TOKENIZER_CONFIG,
-            local_files_only=local_files_only,
-        )
-        evf_model_source = _resolve_pretrained_source(
-            cfg.MODEL.OpenWorldSAM2.EVF_CONFIG,
-            cfg.MODEL.OpenWorldSAM2.LOCAL_EVF_CONFIG,
-        )
-        try:
-            evf_sam2 = EvfSam2Model.from_pretrained(
-                evf_model_source,
-                low_cpu_mem_usage=False,
-                local_files_only=local_files_only,
-                **kwargs,
-            )
-        except OSError as exc:
-            raise RuntimeError(
-                "Failed to load OpenWorldSAM2 EVF-SAM2 weights from "
-                f"'{evf_model_source}'. Set MODEL.OpenWorldSAM2.LOCAL_EVF_CONFIG "
-                "to a local directory or disable MODEL.OpenWorldSAM2.HF_LOCAL_FILES_ONLY."
-            ) from exc
-
-        evf_sam2.config.eos_token_id = tokenizer.eos_token_id
-        evf_sam2.config.bos_token_id = tokenizer.bos_token_id
-        evf_sam2.config.pad_token_id = tokenizer.pad_token_id
-        visual_model = evf_sam2.visual_model
-        mm_extractor = evf_sam2.mm_extractor
-        for param in mm_extractor.parameters():
-            param.requires_grad = bool(cfg.MODEL.OpenWorldSAM2.TRAIN_VLM)
-        text_hidden_fcs = evf_sam2.text_hidden_fcs
-        for param in text_hidden_fcs.parameters():
-            param.requires_grad = True
-
-        query_dim = cfg.MODEL.OpenWorldSAM2.QUERY_DIM
-        num_tokens = cfg.MODEL.OpenWorldSAM2.NUM_OBJECT_QUERIES
-        positional_tokens = nn.Parameter(torch.randn(num_tokens, query_dim))
-        positional_tokens.requires_grad = bool(
-            cfg.MODEL.OpenWorldSAM2.TRAIN_TIE_BREAKER
-        )
-
-        no_object_weight = cfg.MODEL.OpenWorldSAM2.NO_OBJECT_WEIGHT
-        dice_weight = cfg.MODEL.OpenWorldSAM2.DICE_WEIGHT
-        mask_weight = cfg.MODEL.OpenWorldSAM2.MASK_WEIGHT
-        objectness_weight = cfg.MODEL.OpenWorldSAM2.OBJECTNESS_WEIGHT
-        use_cross_attention = getattr(
-            cfg.MODEL.OpenWorldSAM2,
-            "USE_CROSS_ATTENTION",
-            False,
-        )
-        two_stage_inference = getattr(
-            cfg.MODEL.OpenWorldSAM2.TEST,
-            "TWO_STAGE_INFERENCE",
-            False,
-        )
-        refer_on = getattr(cfg.MODEL.OpenWorldSAM2.TEST, "REFER_ON", False)
-
-        matcher = HungarianMatcher(
-            cost_class=objectness_weight,
-            cost_mask=mask_weight,
-            cost_dice=dice_weight,
-        )
-        criterion = SetCriterion(
-            num_classes=1,
-            matcher=matcher,
-            weight_dict={
-                "loss_ce": objectness_weight,
-                "loss_mask": mask_weight,
-                "loss_dice": dice_weight,
-            },
-            eos_coef=no_object_weight,
-            losses=["labels", "masks"],
-        )
-
-        train_datasets = getattr(cfg.DATASETS, "TRAIN", [])
-        dataset_name = train_datasets[0] if train_datasets else "reasonseg_runtime"
-        return {
-            "evf_sam2": evf_sam2,
-            "tokenizer": tokenizer,
-            "visual_model": visual_model,
-            "mm_extractor": mm_extractor,
-            "text_hidden_fcs": text_hidden_fcs,
-            "query_dim": query_dim,
-            "num_tokens": num_tokens,
-            "positional_tokens": positional_tokens,
-            "criterion": criterion,
-            "pixel_mean": cfg.MODEL.PIXEL_MEAN,
-            "pixel_std": cfg.MODEL.PIXEL_STD,
-            "dtype": torch_dtype,
-            "semantic_on": cfg.MODEL.OpenWorldSAM2.TEST.SEMANTIC_ON,
-            "instance_on": cfg.MODEL.OpenWorldSAM2.TEST.INSTANCE_ON,
-            "panoptic_on": cfg.MODEL.OpenWorldSAM2.TEST.PANOPTIC_ON,
-            "reasonseg_enabled": cfg.MODEL.OpenWorldSAM2.REASONSEG_ENABLED,
-            "composition_mode": cfg.MODEL.OpenWorldSAM2.composition_mode,
-            "top_k_on": cfg.MODEL.OpenWorldSAM2.TEST.TOP_K_ON,
-            "nms_on": cfg.MODEL.OpenWorldSAM2.TEST.NMS_ON,
-            "test_topk_per_image": cfg.MODEL.OpenWorldSAM2.TEST.DETECTIONS_PER_IMAGE,
-            "nms_threshold": cfg.MODEL.OpenWorldSAM2.TEST.NMS_THRESHOLD,
-            "iou_threshold": cfg.MODEL.OpenWorldSAM2.TEST.IOU_THRESHOLD,
-            "sam_iou": cfg.MODEL.OpenWorldSAM2.SAM_IOU,
-            "use_visual_tokens": cfg.MODEL.OpenWorldSAM2.USE_VISUAL_TOKENS,
-            "use_cross_attention": use_cross_attention,
-            "cross_attention_layers": cfg.MODEL.OpenWorldSAM2.CROSS_ATTENTION_LAYERS,
-            "two_stage_inference": two_stage_inference,
-            "refer_on": refer_on,
-            "metadata": MetadataCatalog.get(dataset_name),
-        }
+        common_kwargs, _ = _build_open_world_sam2_common_kwargs(cfg)
+        common_kwargs.update(_build_open_world_sam2_parser_kwargs(cfg))
+        return common_kwargs
 
     @property
     def device(self):
@@ -308,6 +458,8 @@ class OpenWorldSAM2(nn.Module):
 
     def _select_prompts(self, batch_input: Mapping[str, Any]) -> list[str]:
         prompts = None
+        if self.learned_parser_enabled and hasattr(self, '_last_tag_logits'):
+            prompts = batch_input.get("composed_prompt")
         if self.reasonseg_enabled and self.composition_mode == "composed_prompt":
             prompts = batch_input.get("composed_prompt")
         if (
@@ -339,12 +491,29 @@ class OpenWorldSAM2(nn.Module):
             offset.append(offset[-1] + len(prompts))
         return all_prompts, offset
 
-    def forward(self, batched_inputs, return_intermediate: bool = False):
+    @staticmethod
+    def _apply_vr_ov_scene_graph_prompt_context(
+        batch_feat_with_tokens: torch.Tensor,
+        hoi_tokens: torch.Tensor | None,
+    ) -> torch.Tensor:
+        if hoi_tokens is None:
+            return batch_feat_with_tokens
+        hoi_context = hoi_tokens.mean(dim=0).to(
+            device=batch_feat_with_tokens.device,
+            dtype=batch_feat_with_tokens.dtype,
+        )
+        return batch_feat_with_tokens + hoi_context.view(1, 1, -1)
+
+    def _assert_forward_backend_available(self) -> None:
         if not hasattr(self.visual_model, "forward_image"):
             raise RuntimeError(
                 "OpenWorldSAM2 imported successfully, but its heavyweight vision backend is not "
                 "available for execution in this Task 6 slice."
             )
+
+    def _prepare_input_tensors(
+        self, batched_inputs: list[Mapping[str, Any]]
+    ) -> tuple[torch.Tensor, torch.Tensor, list[tuple[int, int]]]:
         images = [
             x["image"].to(dtype=self.dtype, device=self.device) for x in batched_inputs
         ]
@@ -353,49 +522,19 @@ class OpenWorldSAM2(nn.Module):
             x["evf_image"].to(dtype=self.dtype, device=self.device)
             for x in batched_inputs
         ]
-        images = ImageList.from_tensors(images, 1024).tensor
-        images_evf = ImageList.from_tensors(images_evf, 224).tensor
+        return (
+            ImageList.from_tensors(images, 1024).tensor,
+            ImageList.from_tensors(images_evf, 224).tensor,
+            original_size_list,
+        )
 
-        all_prompts, offset = self.build_prompt_batch(batched_inputs)
-        input_ids, attention_masks = self.tokenize_prompts(all_prompts)
-        input_ids = input_ids.to(self.device)
-        attention_masks = attention_masks.to(self.device)
-        batch_size = len(batched_inputs)
-
+    def _encode_backbone_features(
+        self, images: torch.Tensor, batch_size: int
+    ) -> tuple[dict[str, Any], dict[str, torch.Tensor]]:
         backbone_out = self.visual_model.forward_image(images)
         _, image_embeddings, _, _ = self.visual_model._prepare_backbone_features(
             backbone_out
         )
-
-        if self.use_visual_tokens:
-            images_evf_list = []
-            for index in range(len(offset) - 1):
-                start_idx, end_idx = offset[index], offset[index + 1]
-                images_evf_list.append(
-                    images_evf[index]
-                    .unsqueeze(0)
-                    .expand(end_idx - start_idx, -1, -1, -1)
-                    .contiguous()
-                )
-            images_evf = torch.cat(images_evf_list, dim=0)
-            output = self.mm_extractor.beit3(
-                visual_tokens=images_evf,
-                textual_tokens=input_ids,
-                text_padding_position=~attention_masks,
-            )
-        else:
-            output = self.mm_extractor.beit3(
-                visual_tokens=None,
-                textual_tokens=input_ids,
-                text_padding_position=~attention_masks,
-            )
-
-        feat = self.text_hidden_fcs[0](output["encoder_out"][:, :1, ...])
-        feat = torch.split(
-            feat,
-            [offset[index + 1] - offset[index] for index in range(len(offset) - 1)],
-        )
-
         image_embeddings = [feature.to(images.dtype) for feature in image_embeddings]
         if self.visual_model.directly_add_no_mem_embed:
             image_embeddings[-1] = image_embeddings[-1] + self.visual_model.no_mem_embed
@@ -407,186 +546,693 @@ class OpenWorldSAM2(nn.Module):
                 self._bb_feat_sizes[::-1],
             )
         ][::-1]
-        features = {"image_embed": feats[-1], "high_res_feats": feats[:-1]}
+        return backbone_out, {"image_embed": feats[-1], "high_res_feats": feats[:-1]}
 
+    def _encode_text_prompts(
+        self,
+        batched_inputs: list[Mapping[str, Any]],
+        images_evf: torch.Tensor,
+    ) -> tuple[
+        tuple[torch.Tensor, ...],
+        list[int],
+        torch.Tensor,
+        torch.Tensor,
+        dict[str, Any],
+    ]:
+        all_prompts, offset = self.build_prompt_batch(batched_inputs)
+        input_ids, attention_masks = self.tokenize_prompts(all_prompts)
+        input_ids = input_ids.to(self.device)
+        attention_masks = attention_masks.to(self.device)
+
+        if self.use_visual_tokens:
+            images_evf_list = []
+            for index in range(len(offset) - 1):
+                start_idx, end_idx = offset[index], offset[index + 1]
+                images_evf_list.append(
+                    images_evf[index]
+                    .unsqueeze(0)
+                    .expand(end_idx - start_idx, -1, -1, -1)
+                    .contiguous()
+                )
+            visual_tokens = torch.cat(images_evf_list, dim=0)
+        else:
+            visual_tokens = None
+
+        output = self.mm_extractor.beit3(
+            visual_tokens=visual_tokens,
+            textual_tokens=input_ids,
+            text_padding_position=~attention_masks,
+        )
+        feat = self.text_hidden_fcs[0](output["encoder_out"][:, :1, ...])
+        feat = torch.split(
+            feat,
+            [offset[index + 1] - offset[index] for index in range(len(offset) - 1)],
+        )
+        return feat, offset, input_ids, attention_masks, output
+
+    def _update_learned_parser_logits(self, output: dict[str, Any]) -> None:
+        if self.learned_parser_enabled and self.parser_head is not None:
+            self._last_tag_logits = self.parser_head(output["encoder_out"])
+
+    def _new_composition_scores(self):
+        from model.vr_ov_types import CompositionScores
+
+        return CompositionScores()
+
+    @staticmethod
+    def _validate_query_graph(query_graph: Any, *, context: str) -> None:
+        from model.vr_ov_types import QueryGraph
+
+        if not isinstance(query_graph, QueryGraph):
+            raise TypeError(f"{context} must be a QueryGraph, got {type(query_graph).__name__}.")
+        if len(query_graph.nodes) != 4:
+            raise ValueError(
+                f"{context} must contain exactly 4 semantic nodes; got {len(query_graph.nodes)}."
+            )
+        if len(query_graph.node_types) != 4:
+            raise ValueError(
+                f"{context} must declare 4 node types; got {len(query_graph.node_types)}."
+            )
+        if not isinstance(query_graph.edges, torch.Tensor):
+            raise TypeError(f"{context}.edges must be a torch.Tensor.")
+        if query_graph.edges.ndim != 2 or query_graph.edges.shape[0] != 2:
+            raise ValueError(
+                f"{context}.edges must have shape [2, num_edges]; got {tuple(query_graph.edges.shape)}."
+            )
+
+        node_dim: int | None = None
+        for index, node in enumerate(query_graph.nodes):
+            if not isinstance(node, torch.Tensor):
+                raise TypeError(
+                    f"{context}.nodes[{index}] must be a torch.Tensor, got {type(node).__name__}."
+                )
+            if node.ndim != 1:
+                raise ValueError(
+                    f"{context}.nodes[{index}] must be 1-D; got shape {tuple(node.shape)}."
+                )
+            if node_dim is None:
+                node_dim = int(node.shape[0])
+            elif int(node.shape[0]) != node_dim:
+                raise ValueError(
+                    f"{context} node feature dims must match; expected {node_dim}, got {int(node.shape[0])} at index {index}."
+                )
+
+    @staticmethod
+    def _validate_scene_graph_outputs(
+        scene_graph_outputs: Any,
+        *,
+        batch_size: int,
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        if not isinstance(scene_graph_outputs, tuple) or len(scene_graph_outputs) != 3:
+            raise ValueError(
+                "VR-OV scene graph encoder must return a 3-tuple of (hoi_tokens, regions, relation_logits)."
+            )
+        hoi_tokens, regions, relation_logits = scene_graph_outputs
+        for name, tensor in (
+            ("hoi_tokens", hoi_tokens),
+            ("regions", regions),
+            ("relation_logits", relation_logits),
+        ):
+            if not isinstance(tensor, torch.Tensor):
+                raise TypeError(f"VR-OV scene graph output '{name}' must be a torch.Tensor.")
+            if tensor.ndim != 3:
+                raise ValueError(
+                    f"VR-OV scene graph output '{name}' must be rank-3 [B, N, C]; got {tuple(tensor.shape)}."
+                )
+            if tensor.shape[0] != batch_size:
+                raise ValueError(
+                    f"VR-OV scene graph output '{name}' batch size must be {batch_size}; got {tensor.shape[0]}."
+                )
+        if hoi_tokens.shape[-1] != regions.shape[-1]:
+            raise ValueError(
+                "VR-OV scene graph outputs must share the same hidden dim for hoi_tokens and regions."
+            )
+        return hoi_tokens, regions, relation_logits
+
+    @staticmethod
+    def _validate_composition_scores(
+        comp_scores: Any,
+        *,
+        expected_batch: int,
+        expected_hw: tuple[int, int],
+        require_all_modalities: bool,
+        context: str,
+    ):
+        from model.vr_ov_types import CompositionScores
+
+        if not isinstance(comp_scores, CompositionScores):
+            raise TypeError(
+                f"{context} must return CompositionScores, got {type(comp_scores).__name__}."
+            )
+
+        height, width = expected_hw
+        for field_name in ("cat_feat", "attr_feat", "rel_feat", "act_feat"):
+            value = getattr(comp_scores, field_name)
+            if value is None:
+                if require_all_modalities:
+                    raise ValueError(
+                        f"{context} must populate '{field_name}' for the canonical VR-OV path."
+                    )
+                continue
+            if not isinstance(value, torch.Tensor):
+                raise TypeError(f"{context}.{field_name} must be a torch.Tensor.")
+            if value.ndim != 4:
+                raise ValueError(
+                    f"{context}.{field_name} must have shape [B, 1, H, W]; got {tuple(value.shape)}."
+                )
+            if tuple(value.shape) != (expected_batch, 1, height, width):
+                raise ValueError(
+                    f"{context}.{field_name} must have shape {(expected_batch, 1, height, width)}; got {tuple(value.shape)}."
+                )
+        return comp_scores
+
+    @staticmethod
+    def _expand_composition_scores_for_masks(
+        comp_scores,
+        *,
+        prompt_count: int,
+        mask_count: int,
+    ):
+        from model.vr_ov_types import CompositionScores
+
+        if prompt_count <= 0:
+            raise ValueError("VR-OV refinement requires at least one prompt-level composition score.")
+        if mask_count % prompt_count != 0:
+            raise ValueError(
+                f"VR-OV refinement expects mask_count ({mask_count}) to be divisible by prompt_count ({prompt_count})."
+            )
+        repeats = mask_count // prompt_count
+        if repeats == 1:
+            return comp_scores
+        return CompositionScores(
+            cat_feat=comp_scores.cat_feat.repeat_interleave(repeats, dim=0),
+            attr_feat=comp_scores.attr_feat.repeat_interleave(repeats, dim=0),
+            rel_feat=comp_scores.rel_feat.repeat_interleave(repeats, dim=0),
+            act_feat=comp_scores.act_feat.repeat_interleave(repeats, dim=0),
+        )
+
+    @staticmethod
+    def _resize_composition_scores(
+        comp_scores,
+        *,
+        target_hw: tuple[int, int],
+    ):
+        from model.vr_ov_types import CompositionScores
+
+        target_height, target_width = target_hw
+
+        def _resize(score: torch.Tensor | None) -> torch.Tensor | None:
+            if score is None or tuple(score.shape[-2:]) == (target_height, target_width):
+                return score
+            return F.interpolate(
+                score,
+                size=(target_height, target_width),
+                mode="bilinear",
+                align_corners=False,
+            )
+
+        return CompositionScores(
+            cat_feat=_resize(comp_scores.cat_feat),
+            attr_feat=_resize(comp_scores.attr_feat),
+            rel_feat=_resize(comp_scores.rel_feat),
+            act_feat=_resize(comp_scores.act_feat),
+        )
+
+    def _run_vr_ov_scene_graph(
+        self, backbone_out: dict[str, Any]
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor] | None:
+        if self.vr_ov_scene_graph is None:
+            return None
+        features = {
+            "high_res_feats": backbone_out["backbone_fpn"][:-1],
+            "image_embed": backbone_out["backbone_fpn"][-1],
+        }
+        return self._validate_scene_graph_outputs(
+            self.vr_ov_scene_graph(features),
+            batch_size=int(features["image_embed"].shape[0]),
+        )
+
+    @staticmethod
+    def _prompt_payloads_for_image(batch_input: Mapping[str, Any]) -> tuple[list[Any] | None, list[Any] | None]:
+        query_graphs = batch_input.get("query_graphs")
+        if isinstance(query_graphs, list):
+            return query_graphs, None
+
+        single_query_graph = batch_input.get("query_graph")
+        if single_query_graph is not None:
+            return [single_query_graph], None
+
+        query_structs = batch_input.get("query_struct")
+        if isinstance(query_structs, list):
+            return None, query_structs
+        return None, None
+
+    def _run_vr_ov_query_parser(
+        self,
+        *,
+        batched_inputs: list[Mapping[str, Any]],
+        offset: Sequence[int],
+        output: dict[str, Any],
+        input_ids: torch.Tensor,
+        attention_masks: torch.Tensor,
+    ) -> list[list[Any]] | None:
+        if self.vr_ov_query_parser is None:
+            return None
+        if len(offset) != len(batched_inputs) + 1:
+            raise ValueError(
+                f"VR-OV query parser offsets must align with the image batch; got {len(offset)} offsets for {len(batched_inputs)} images."
+            )
+        encoder_out = output["encoder_out"]
+        if not isinstance(encoder_out, torch.Tensor) or encoder_out.ndim != 3:
+            raise ValueError("VR-OV query parser expects encoder_out with shape [num_prompts, seq_len, hidden_dim].")
+        parsed_query_graphs: list[list[Any]] = []
+
+        for image_index, batch_input in enumerate(batched_inputs):
+            prompt_query_graphs, prompt_query_structs = self._prompt_payloads_for_image(
+                batch_input
+            )
+            start_index = int(offset[image_index])
+            end_index = int(offset[image_index + 1])
+            expected_prompt_count = end_index - start_index
+
+            if prompt_query_graphs is not None:
+                if len(prompt_query_graphs) != expected_prompt_count:
+                    raise ValueError(
+                        f"VR-OV query_graphs count mismatch for image {image_index}: expected {expected_prompt_count}, got {len(prompt_query_graphs)}."
+                    )
+                for prompt_index, query_graph in enumerate(prompt_query_graphs):
+                    self._validate_query_graph(
+                        query_graph,
+                        context=f"VR-OV query_graphs[{image_index}][{prompt_index}]",
+                    )
+                parsed_query_graphs.append(list(prompt_query_graphs))
+                continue
+
+            if (
+                prompt_query_structs is not None
+                and len(prompt_query_structs) != expected_prompt_count
+            ):
+                raise ValueError(
+                    f"VR-OV query_struct count mismatch for image {image_index}: expected {expected_prompt_count}, got {len(prompt_query_structs)}."
+                )
+
+            image_query_graphs: list[Any] = []
+            for prompt_index, flat_index in enumerate(range(start_index, end_index)):
+                prompt_length = int(attention_masks[flat_index].sum().item())
+                prompt_tokens = self.tokenizer.convert_ids_to_tokens(
+                    input_ids[flat_index, :prompt_length].tolist()
+                )
+                prompt_query_struct = None
+                if prompt_query_structs is not None and prompt_index < len(prompt_query_structs):
+                    prompt_query_struct = prompt_query_structs[prompt_index]
+                query_graph = self.vr_ov_query_parser(
+                        beit3_hidden=encoder_out[flat_index : flat_index + 1, :prompt_length],
+                        attention_mask=attention_masks[flat_index, :prompt_length].unsqueeze(0),
+                        tokens_list=prompt_tokens,
+                        query_struct=prompt_query_struct,
+                    )
+                self._validate_query_graph(
+                    query_graph,
+                    context=f"VR-OV parser output[{image_index}][{prompt_index}]",
+                )
+                image_query_graphs.append(query_graph)
+            parsed_query_graphs.append(image_query_graphs)
+
+        return parsed_query_graphs
+
+    def _run_vr_ov_comp_matcher(
+        self,
+        *,
+        query_graphs: Sequence[Any] | None,
+        image_embed: torch.Tensor,
+    ):
+        comp_scores = self._new_composition_scores()
+        if self.vr_ov_comp_matcher is None:
+            return comp_scores
+        if not query_graphs:
+            raise ValueError("VR-OV composition matcher requires at least one query graph.")
+
+        for prompt_index, query_graph in enumerate(query_graphs):
+            self._validate_query_graph(
+                query_graph,
+                context=f"VR-OV composition input[{prompt_index}]",
+            )
+        if image_embed.ndim != 3:
+            raise ValueError(
+                f"VR-OV composition matcher expects image_embed with shape [C, H, W]; got {tuple(image_embed.shape)}."
+            )
+
+        query_nodes = torch.stack(
+            [torch.stack(query_graph.nodes, dim=0) for query_graph in query_graphs],
+            dim=0,
+        )
+        prompt_count = query_nodes.shape[0]
+        vis_feat = (
+            image_embed.flatten(1)
+            .transpose(0, 1)
+            .unsqueeze(0)
+            .expand(prompt_count, -1, -1)
+            .contiguous()
+        )
+        image_embed_batch = image_embed.unsqueeze(0).expand(prompt_count, -1, -1, -1).contiguous()
+        comp_scores, _ = self.vr_ov_comp_matcher(
+            query_nodes,
+            vis_feat,
+            image_embed_batch,
+        )
+        return self._validate_composition_scores(
+            comp_scores,
+            expected_batch=prompt_count,
+            expected_hw=(int(image_embed.shape[-2]), int(image_embed.shape[-1])),
+            require_all_modalities=True,
+            context="VR-OV composition matcher output",
+        )
+
+    def _build_prompt_tokens(self, img_feat: torch.Tensor) -> torch.Tensor:
+        batch_feat_with_tokens = []
+        for prompt_feat in img_feat:
+            feat_repeated = prompt_feat.expand(self.num_tokens, -1, -1)
+            batch_feat_with_tokens.append(
+                feat_repeated + self.positional_tokens.unsqueeze(1)
+            )
+        return torch.cat(batch_feat_with_tokens, dim=0)
+
+    def _apply_cross_attention_prompt_context(
+        self,
+        batch_feat_with_tokens: torch.Tensor,
+        image_embed: torch.Tensor,
+    ) -> torch.Tensor:
+        if not self.use_cross_attention:
+            return batch_feat_with_tokens
+        flat_image_embed = image_embed.flatten(1).transpose(0, 1).unsqueeze(0)
+        original_batch_feat = batch_feat_with_tokens
+        reshaped_batch_feat = (
+            batch_feat_with_tokens.squeeze(1)
+            if batch_feat_with_tokens.dim() == 3
+            else batch_feat_with_tokens
+        )
+        enhanced_batch_feat = self.cross_attention_transformer(
+            reshaped_batch_feat.unsqueeze(0),
+            flat_image_embed,
+        ).squeeze(0)
+        if batch_feat_with_tokens.dim() == 2:
+            enhanced_batch_feat = enhanced_batch_feat.unsqueeze(1)
+        return original_batch_feat + enhanced_batch_feat
+
+    def _decode_masks_for_image(
+        self,
+        *,
+        features: dict[str, torch.Tensor],
+        batch_feat_with_tokens: torch.Tensor,
+        img_idx: int,
+    ) -> tuple[torch.Tensor, torch.Tensor, list[torch.Tensor]]:
+        sparse_embeddings, dense_embeddings = self.visual_model.sam_prompt_encoder(
+            points=None,
+            boxes=None,
+            masks=None,
+            text_embeds=batch_feat_with_tokens,
+        )
+        sparse_embeddings = sparse_embeddings.to(batch_feat_with_tokens.dtype)
+        high_res_features = [
+            feat_level[img_idx].unsqueeze(0) for feat_level in features["high_res_feats"]
+        ]
+        low_res_masks, iou_pred, sam_tokens_out, _ = self.visual_model.sam_mask_decoder(
+            image_embeddings=features["image_embed"][img_idx].unsqueeze(0),
+            image_pe=self.visual_model.sam_prompt_encoder.get_dense_pe(),
+            sparse_prompt_embeddings=sparse_embeddings,
+            dense_prompt_embeddings=dense_embeddings,
+            multimask_output=False,
+            repeat_image=True,
+            high_res_features=high_res_features,
+        )
+        pred_logits = (
+            self.objectness_prediction_head(sam_tokens_out.squeeze(1))
+            if not self.sam_iou
+            else iou_pred
+        )
+        return low_res_masks, pred_logits, high_res_features
+
+    def _class_labels_for_image(
+        self,
+        *,
+        pred_masks: torch.Tensor,
+        unique_categories: list[int],
+    ) -> torch.Tensor:
+        num_total_masks = len(pred_masks)
+        class_indices = torch.div(
+            torch.arange(num_total_masks, device=self.device),
+            self.num_tokens,
+            rounding_mode="floor",
+        )
+        return torch.tensor(
+            [unique_categories[index] for index in class_indices],
+            dtype=torch.int64,
+            device=self.device,
+        )
+
+    def _run_two_stage_inference(
+        self,
+        *,
+        low_res_masks: torch.Tensor,
+        pred_logits: torch.Tensor,
+        class_labels: torch.Tensor,
+        features: dict[str, torch.Tensor],
+        high_res_features: list[torch.Tensor],
+        img_idx: int,
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        iou_scores = pred_logits.squeeze(1) if pred_logits.dim() > 1 else pred_logits
+        keep_indices = iou_scores >= self.iou_threshold
+        if keep_indices.sum() <= 0:
+            return low_res_masks, pred_logits, class_labels
+
+        filtered_masks = low_res_masks[keep_indices]
+        filtered_class_labels = class_labels[keep_indices]
+        sparse_embeddings, dense_embeddings = self.visual_model.sam_prompt_encoder(
+            points=None,
+            boxes=None,
+            masks=filtered_masks,
+            text_embeds=None,
+        )
+        low_res_masks, pred_logits, _, _ = self.visual_model.sam_mask_decoder(
+            image_embeddings=features["image_embed"][img_idx].unsqueeze(0),
+            image_pe=self.visual_model.sam_prompt_encoder.get_dense_pe(),
+            sparse_prompt_embeddings=sparse_embeddings,
+            dense_prompt_embeddings=dense_embeddings,
+            multimask_output=False,
+            repeat_image=True,
+            high_res_features=high_res_features,
+        )
+        return low_res_masks, pred_logits, filtered_class_labels
+
+    def _build_processed_result(
+        self,
+        *,
+        low_res_masks: torch.Tensor,
+        pred_logits: torch.Tensor,
+        class_labels: torch.Tensor,
+        features: dict[str, torch.Tensor],
+        high_res_features: list[torch.Tensor],
+        original_hw: tuple[int, int],
+        img_idx: int,
+        comp_scores: Any | None = None,
+        use_refine_decoder: bool = False,
+    ) -> dict[str, Any]:
+        result: dict[str, Any] = {}
+        if use_refine_decoder and self.vr_ov_refine_decoder is not None:
+            if comp_scores is None:
+                raise ValueError(
+                    "VR-OV refinement requires composition scores; received None."
+                )
+            visual_feat = features["image_embed"][img_idx].unsqueeze(0)
+            if tuple(visual_feat.shape[-2:]) != tuple(low_res_masks.shape[-2:]):
+                visual_feat = F.interpolate(
+                    visual_feat,
+                    size=(int(low_res_masks.shape[-2]), int(low_res_masks.shape[-1])),
+                    mode="bilinear",
+                    align_corners=False,
+                )
+            num_masks = low_res_masks.shape[0]
+            if num_masks % self.num_tokens != 0:
+                raise ValueError(
+                    f"VR-OV refinement expects num_masks ({num_masks}) to be divisible by num_tokens ({self.num_tokens})."
+                )
+            prompt_count = num_masks // self.num_tokens
+            aligned_scores = self._resize_composition_scores(
+                comp_scores,
+                target_hw=(int(low_res_masks.shape[-2]), int(low_res_masks.shape[-1])),
+            )
+            validated_scores = self._validate_composition_scores(
+                aligned_scores,
+                expected_batch=prompt_count,
+                expected_hw=(int(low_res_masks.shape[-2]), int(low_res_masks.shape[-1])),
+                require_all_modalities=True,
+                context="VR-OV refinement input",
+            )
+            expanded_scores = self._expand_composition_scores_for_masks(
+                validated_scores,
+                prompt_count=prompt_count,
+                mask_count=num_masks,
+            )
+            if num_masks > 1:
+                visual_feat = visual_feat.expand(num_masks, -1, -1, -1)
+            low_res_masks, refine_history = self.vr_ov_refine_decoder(
+                low_res_masks,
+                expanded_scores,
+                visual_feat,
+            )
+            result["refine_history"] = [
+                {
+                    "stage": state.stage,
+                    "iou": state.iou,
+                    "converged": state.converged,
+                }
+                for state in refine_history
+            ]
+        elif self.two_stage_inference:
+            low_res_masks, pred_logits, class_labels = self._run_two_stage_inference(
+                low_res_masks=low_res_masks,
+                pred_logits=pred_logits,
+                class_labels=class_labels,
+                features=features,
+                high_res_features=high_res_features,
+                img_idx=img_idx,
+            )
+
+        pred_masks = self.postprocess_masks(low_res_masks, orig_hw=original_hw)
+        if self.refer_on:
+            refer_masks, refer_scores = self.refer_inference(
+                pred_masks,
+                pred_logits,
+                class_labels,
+            )
+            result["grounding_mask"] = refer_masks
+            result["grounding_scores"] = refer_scores
+
+        if self.instance_on:
+            result["instances"] = self.instance_inference(
+                pred_masks,
+                pred_logits,
+                class_labels,
+            )
+
+        if self.panoptic_on:
+            result["panoptic_seg"] = self.panoptic_inference(
+                pred_logits,
+                pred_masks,
+                class_labels,
+            )
+
+        if self.semantic_on:
+            num_classes = len(getattr(self.metadata, "stuff_classes", []))
+            mask_cls = torch.zeros(
+                (pred_masks.shape[0], num_classes + 1),
+                device=self.device,
+            )
+            for index, (cls_id, score) in enumerate(
+                zip(class_labels, pred_logits.squeeze(1))
+            ):
+                mask_cls[index, cls_id] = score
+            result["sem_seg"] = self.semantic_inference(
+                mask_cls,
+                pred_masks,
+                keep_sem_bgd=False,
+            )
+        if comp_scores is not None:
+            result["vr_ov_compositional"] = {
+                "has_comp_scores": True,
+                "modalities": [
+                    field_name
+                    for field_name in ("cat_feat", "attr_feat", "rel_feat", "act_feat")
+                    if getattr(comp_scores, field_name, None) is not None
+                ],
+            }
+        return result
+
+    def _accumulate_prompt_losses(
+        self,
+        *,
+        pred_masks: torch.Tensor,
+        pred_logits: torch.Tensor,
+        gt_instances: Any,
+        all_losses: dict[str, list[torch.Tensor]],
+        return_intermediate: bool,
+    ) -> tuple[dict[str, torch.Tensor], list[dict[str, torch.Tensor]]] | None:
+        if not isinstance(gt_instances, list):
+            gt_instances = [gt_instances]
+
+        pred_masks_list = torch.split(pred_masks, [self.num_tokens] * len(gt_instances))
+        pred_logits_list = torch.split(pred_logits, [self.num_tokens] * len(gt_instances))
+        for prompt_idx, prompt_target in enumerate(gt_instances):
+            prompt_outputs = {
+                "pred_masks": pred_masks_list[prompt_idx].unsqueeze(0),
+                "pred_logits": pred_logits_list[prompt_idx].unsqueeze(0),
+            }
+            prompt_targets = self.prepare_targets([prompt_target])
+            if return_intermediate and prompt_idx == 0:
+                return prompt_outputs, prompt_targets
+            prompt_losses = self.criterion(
+                prompt_outputs,
+                prompt_targets,
+                reduce_num_masks=False,
+            )
+            criterion_weight_dict = self.criterion.weight_dict
+            for key, value in prompt_losses.items():
+                if key in criterion_weight_dict:
+                    all_losses[key].append(value * criterion_weight_dict[key])
+        return None
+
+    def forward(self, batched_inputs, return_intermediate: bool = False):
+        self._assert_forward_backend_available()
+        images, images_evf, original_size_list = self._prepare_input_tensors(
+            batched_inputs
+        )
+        batch_size = len(batched_inputs)
+        _, features = self._encode_backbone_features(images, batch_size)
+        feat, _, _, _, output = self._encode_text_prompts(batched_inputs, images_evf)
+        self._update_learned_parser_logits(output)
         all_losses: dict[str, list[torch.Tensor]] = defaultdict(list)
         processed_results: list[dict[str, Any]] = []
 
         for img_idx in range(batch_size):
-            img_feat = feat[img_idx]
-            batch_feat_with_tokens = []
-            for prompt_feat in img_feat:
-                feat_repeated = prompt_feat.expand(self.num_tokens, -1, -1)
-                batch_feat_with_tokens.append(
-                    feat_repeated + self.positional_tokens.unsqueeze(1)
-                )
-            batch_feat_with_tokens = torch.cat(batch_feat_with_tokens, dim=0)
-
-            if self.use_cross_attention:
-                img_embed = features["image_embed"][img_idx].flatten(1).transpose(0, 1)
-                img_embed = img_embed.unsqueeze(0)
-                original_batch_feat = batch_feat_with_tokens
-                reshaped_batch_feat = (
-                    batch_feat_with_tokens.squeeze(1)
-                    if batch_feat_with_tokens.dim() == 3
-                    else batch_feat_with_tokens
-                )
-                enhanced_batch_feat = self.cross_attention_transformer(
-                    reshaped_batch_feat.unsqueeze(0),
-                    img_embed,
-                ).squeeze(0)
-                if batch_feat_with_tokens.dim() == 2:
-                    enhanced_batch_feat = enhanced_batch_feat.unsqueeze(1)
-                batch_feat_with_tokens = original_batch_feat + enhanced_batch_feat
-
-            sparse_embeddings, dense_embeddings = self.visual_model.sam_prompt_encoder(
-                points=None,
-                boxes=None,
-                masks=None,
-                text_embeds=batch_feat_with_tokens,
+            batch_feat_with_tokens = self._build_prompt_tokens(feat[img_idx])
+            batch_feat_with_tokens = self._apply_cross_attention_prompt_context(
+                batch_feat_with_tokens,
+                features["image_embed"][img_idx],
             )
-            sparse_embeddings = sparse_embeddings.to(batch_feat_with_tokens.dtype)
-            high_res_features = [
-                feat_level[img_idx].unsqueeze(0)
-                for feat_level in features["high_res_feats"]
-            ]
-            low_res_masks, iou_pred, sam_tokens_out, _ = (
-                self.visual_model.sam_mask_decoder(
-                    image_embeddings=features["image_embed"][img_idx].unsqueeze(0),
-                    image_pe=self.visual_model.sam_prompt_encoder.get_dense_pe(),
-                    sparse_prompt_embeddings=sparse_embeddings,
-                    dense_prompt_embeddings=dense_embeddings,
-                    multimask_output=False,
-                    repeat_image=True,
-                    high_res_features=high_res_features,
-                )
+            low_res_masks, pred_logits, high_res_features = self._decode_masks_for_image(
+                features=features,
+                batch_feat_with_tokens=batch_feat_with_tokens,
+                img_idx=img_idx,
             )
-
             pred_masks = low_res_masks.squeeze(1)
-            pred_logits = (
-                self.objectness_prediction_head(sam_tokens_out.squeeze(1))
-                if not self.sam_iou
-                else iou_pred
-            )
 
             if not self.training:
-                unique_categories = batched_inputs[img_idx]["unique_categories"]
-                num_total_masks = len(pred_masks)
-                class_indices = torch.div(
-                    torch.arange(num_total_masks, device=self.device),
-                    self.num_tokens,
-                    rounding_mode="floor",
+                class_labels = self._class_labels_for_image(
+                    pred_masks=pred_masks,
+                    unique_categories=batched_inputs[img_idx]["unique_categories"],
                 )
-                class_labels = torch.tensor(
-                    [unique_categories[index] for index in class_indices],
-                    dtype=torch.int64,
-                    device=self.device,
+                processed_results.append(
+                    self._build_processed_result(
+                        low_res_masks=low_res_masks,
+                        pred_logits=pred_logits,
+                        class_labels=class_labels,
+                        features=features,
+                        high_res_features=high_res_features,
+                        original_hw=original_size_list[img_idx],
+                        img_idx=img_idx,
+                    )
                 )
-
-                if self.two_stage_inference:
-                    iou_scores = (
-                        pred_logits.squeeze(1) if pred_logits.dim() > 1 else pred_logits
-                    )
-                    keep_indices = iou_scores >= self.iou_threshold
-                    if keep_indices.sum() > 0:
-                        filtered_masks = low_res_masks[keep_indices]
-                        filtered_class_labels = class_labels[keep_indices]
-                        sparse_embeddings, dense_embeddings = (
-                            self.visual_model.sam_prompt_encoder(
-                                points=None,
-                                boxes=None,
-                                masks=filtered_masks,
-                                text_embeds=None,
-                            )
-                        )
-                        low_res_masks, pred_logits, _, _ = (
-                            self.visual_model.sam_mask_decoder(
-                                image_embeddings=features["image_embed"][
-                                    img_idx
-                                ].unsqueeze(0),
-                                image_pe=self.visual_model.sam_prompt_encoder.get_dense_pe(),
-                                sparse_prompt_embeddings=sparse_embeddings,
-                                dense_prompt_embeddings=dense_embeddings,
-                                multimask_output=False,
-                                repeat_image=True,
-                                high_res_features=high_res_features,
-                            )
-                        )
-                        class_labels = filtered_class_labels
-
-                pred_masks = self.postprocess_masks(
-                    low_res_masks,
-                    orig_hw=original_size_list[img_idx],
-                )
-                processed_results.append({})
-
-                if self.refer_on:
-                    refer_masks, refer_scores = self.refer_inference(
-                        pred_masks,
-                        pred_logits,
-                        class_labels,
-                    )
-                    processed_results[-1]["grounding_mask"] = refer_masks
-                    processed_results[-1]["grounding_scores"] = refer_scores
-
-                if self.instance_on:
-                    processed_results[-1]["instances"] = self.instance_inference(
-                        pred_masks,
-                        pred_logits,
-                        class_labels,
-                    )
-
-                if self.panoptic_on:
-                    processed_results[-1]["panoptic_seg"] = self.panoptic_inference(
-                        pred_logits,
-                        pred_masks,
-                        class_labels,
-                    )
-
-                if self.semantic_on:
-                    num_classes = len(getattr(self.metadata, "stuff_classes", []))
-                    mask_cls = torch.zeros(
-                        (pred_masks.shape[0], num_classes + 1),
-                        device=self.device,
-                    )
-                    for idx, (cls_id, score) in enumerate(
-                        zip(class_labels, pred_logits.squeeze(1))
-                    ):
-                        mask_cls[idx, cls_id] = score
-                    processed_results[-1]["sem_seg"] = self.semantic_inference(
-                        mask_cls,
-                        pred_masks,
-                        keep_sem_bgd=False,
-                    )
                 continue
 
-            gt_instances = batched_inputs[img_idx]["instances"]
-            if not isinstance(gt_instances, list):
-                gt_instances = [gt_instances]
-
-            pred_masks_list = torch.split(
-                pred_masks, [self.num_tokens] * len(gt_instances)
+            intermediate = self._accumulate_prompt_losses(
+                pred_masks=pred_masks,
+                pred_logits=pred_logits,
+                gt_instances=batched_inputs[img_idx]["instances"],
+                all_losses=all_losses,
+                return_intermediate=return_intermediate,
             )
-            pred_logits_list = torch.split(
-                pred_logits, [self.num_tokens] * len(gt_instances)
-            )
-            for prompt_idx, prompt_target in enumerate(gt_instances):
-                prompt_outputs = {
-                    "pred_masks": pred_masks_list[prompt_idx].unsqueeze(0),
-                    "pred_logits": pred_logits_list[prompt_idx].unsqueeze(0),
-                }
-                prompt_targets = self.prepare_targets([prompt_target])
-                if return_intermediate and prompt_idx == 0:
-                    return prompt_outputs, prompt_targets
-                prompt_losses = self.criterion(
-                    prompt_outputs,
-                    prompt_targets,
-                    reduce_num_masks=False,
-                )
-                criterion_weight_dict = self.criterion.weight_dict
-                for key, value in prompt_losses.items():
-                    if key in criterion_weight_dict:
-                        all_losses[key].append(value * criterion_weight_dict[key])
+            if intermediate is not None:
+                return intermediate
 
         if self.training:
             return {

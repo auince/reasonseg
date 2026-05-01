@@ -74,7 +74,7 @@ def _collect_cases(
 def test_all_cases_expose_the_expected_schema(
     normalized_query_cases: list[QueryCase],
 ) -> None:
-    assert len(normalized_query_cases) >= 12
+    assert len(normalized_query_cases) >= 26
 
     for case in normalized_query_cases:
         assert_normalized_query_contract(case["expected"])
@@ -251,6 +251,117 @@ def test_all_cases_expose_the_expected_schema(
             },
             id="malformed-query",
         ),
+        # --- expanded attribute cases ---
+        pytest.param(
+            "green apple",
+            {
+                "target": "apple",
+                "attributes": ["green"],
+                "relations": [],
+                "actions": [],
+                "negatives": [],
+                "exists": True,
+            },
+            id="green-apple",
+        ),
+        pytest.param(
+            "large pizza",
+            {
+                "target": "pizza",
+                "attributes": ["large"],
+                "relations": [],
+                "actions": [],
+                "negatives": [],
+                "exists": True,
+            },
+            id="large-pizza",
+        ),
+        pytest.param(
+            "striped tall person",
+            {
+                "target": "person",
+                "attributes": ["striped", "tall"],
+                "relations": [],
+                "actions": [],
+                "negatives": [],
+                "exists": True,
+            },
+            id="striped-tall-person",
+        ),
+        # --- expanded relation cases ---
+        pytest.param(
+            "dog under table",
+            {
+                "target": "dog",
+                "attributes": [],
+                "relations": [{"type": "under", "target": "table"}],
+                "actions": [],
+                "negatives": [],
+                "exists": True,
+            },
+            id="dog-under-table",
+        ),
+        pytest.param(
+            "cat beside chair",
+            {
+                "target": "cat",
+                "attributes": [],
+                "relations": [{"type": "beside", "target": "chair"}],
+                "actions": [],
+                "negatives": [],
+                "exists": True,
+            },
+            id="cat-beside-chair",
+        ),
+        pytest.param(
+            "cup near plate",
+            {
+                "target": "cup",
+                "attributes": [],
+                "relations": [{"type": "near", "target": "plate"}],
+                "actions": [],
+                "negatives": [],
+                "exists": True,
+            },
+            id="cup-near-plate",
+        ),
+        # --- expanded action cases ---
+        pytest.param(
+            "man holding phone",
+            {
+                "target": "man",
+                "attributes": [],
+                "relations": [],
+                "actions": [{"verb": "holding", "target": "phone"}],
+                "negatives": [],
+                "exists": True,
+            },
+            id="man-holding-phone",
+        ),
+        pytest.param(
+            "woman wearing hat",
+            {
+                "target": "woman",
+                "attributes": [],
+                "relations": [],
+                "actions": [{"verb": "wearing", "target": "hat"}],
+                "negatives": [],
+                "exists": True,
+            },
+            id="woman-wearing-hat",
+        ),
+        pytest.param(
+            "person sitting",
+            {
+                "target": "person",
+                "attributes": [],
+                "relations": [],
+                "actions": [{"verb": "sitting", "target": None}],
+                "negatives": [],
+                "exists": True,
+            },
+            id="person-sitting",
+        ),
     ],
 )
 def test_golden_normalized_queries(
@@ -321,3 +432,51 @@ def test_empty_and_malformed_queries_fail_in_a_controlled_way(
         "negatives": ["malformed_query"],
         "exists": False,
     }
+
+
+@pytest.mark.parametrize(
+    ("query", "expected"),
+    [
+        pytest.param(
+            "  The Red Dress  ",
+            {
+                "target": "dress",
+                "attributes": ["red"],
+                "relations": [],
+                "actions": [],
+                "negatives": [],
+                "exists": True,
+            },
+            id="leading-article-and-case-normalization",
+        ),
+        pytest.param(
+            "dog behind the bicycle",
+            {
+                "target": "dog",
+                "attributes": [],
+                "relations": [{"type": "behind", "target": "bicycle"}],
+                "actions": [],
+                "negatives": [],
+                "exists": True,
+            },
+            id="relation-object-article-stripped",
+        ),
+        pytest.param(
+            "without the bicycle",
+            {
+                "target": None,
+                "attributes": [],
+                "relations": [],
+                "actions": [],
+                "negatives": ["absent_object"],
+                "exists": False,
+            },
+            id="absent-object-fallback",
+        ),
+    ],
+)
+def test_parser_characterizes_current_normalization_edge_cases(
+    query: str,
+    expected: NormalizedQuery,
+) -> None:
+    assert parse_query(query) == expected

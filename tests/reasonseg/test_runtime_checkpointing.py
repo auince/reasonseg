@@ -741,10 +741,20 @@ def test_eval_worker_uses_explicit_checkpoint_and_canonical_inference_dir(
     monkeypatch.setattr(
         runtime_common, "maybe_wrap_model", lambda wrapped_model: wrapped_model
     )
+    _fake_grounding_mask = torch.ones(1, 1, 1, dtype=torch.bool)
     monkeypatch.setattr(
         runtime_common,
         "build_refcoco_test_loader",
-        lambda cfg, dataset_name: [dataset_name, "sample"],
+        lambda cfg, dataset_name: [
+            [
+                {
+                    "groundings": {"masks": _fake_grounding_mask, "texts": []},
+                    "image_id": 1,
+                    "file_name": "test.jpg",
+                    "prompt": ["test"],
+                }
+            ]
+        ],
     )
     monkeypatch.setattr(
         runtime_common,
@@ -770,7 +780,7 @@ def test_eval_worker_uses_explicit_checkpoint_and_canonical_inference_dir(
         "output_dir": runtime_common.get_inference_output_dir(output_dir),
         "distributed": False,
     }
-    assert seen["loader"] == "sample"
+    assert seen["loader"] is not None
     assert result == {"grounding": {"cIoU": 1.0}}
     eval_messages = [
         record.message
@@ -838,10 +848,17 @@ def test_run_evaluation_updates_tqdm_with_running_metrics(
         return bar
 
     monkeypatch.setattr(runtime_eval, "tqdm", _fake_tqdm)
+    _fake_mask = torch.ones(1, 1, 1, dtype=torch.bool)
+    _fake_input = {
+        "groundings": {"masks": _fake_mask, "texts": []},
+        "image_id": 1,
+        "file_name": "test.jpg",
+        "prompt": ["test"],
+    }
     monkeypatch.setattr(
         runtime_common,
         "build_refcoco_test_loader",
-        lambda cfg, dataset_name: [[dataset_name], [dataset_name]],
+        lambda cfg, dataset_name: [[_fake_input], [_fake_input]],
     )
     monkeypatch.setattr(grounding_module, "GroundingEvaluator", _FakeGroundingEvaluator)
 

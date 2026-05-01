@@ -183,11 +183,15 @@ def run_evaluation(
     was_training = bool(getattr(model, "training", False))
     model.eval()
     vis_samples: list[dict[str, Any]] = []
+    vr_ov_artifacts: list[dict[str, Any]] = []
     try:
         with torch.no_grad():
             for inputs in loader:
                 outputs = model(inputs)
                 evaluator.process(inputs, outputs)
+                for out in outputs:
+                    if "vr_ov_compositional" in out:
+                        vr_ov_artifacts.append(out["vr_ov_compositional"])
                 if len(vis_samples) < 20:
                     for inp, out in zip(inputs, outputs):
                         pred_masks = (out["grounding_mask"].sigmoid() > 0.5).cpu().numpy()
@@ -209,6 +213,11 @@ def run_evaluation(
         if results is not None and inference_dir is not None and _is_main_process(runtime_deps["comm"]):
             eval_iter = int(Path(inference_dir).name.split("_")[-1]) if "_" in Path(inference_dir).name else 0
             _save_eval_visualization(vis_samples, inference_dir, eval_iter)
+            if vr_ov_artifacts:
+                (inference_dir / "vr_ov_compositional.json").write_text(
+                    json.dumps(vr_ov_artifacts, indent=2) + "\n",
+                    encoding="utf-8",
+                )
     finally:
         if progress_bar is not None:
             progress_bar.close()
@@ -242,6 +251,15 @@ def _worker(args: argparse.Namespace) -> dict[str, object]:
     setup_runtime_logging(cfg, args, eval_only=True)
     checkpoint_path = resolve_eval_checkpoint_path(args)
     logger = logging.getLogger("reasonseg")
+
+    meta_arch = getattr(cfg.MODEL, "META_ARCHITECTURE", "")
+    if meta_arch == "VR_OV":
+        from model.vr_ov_config import validate_vr_ov_config
+        try:
+            validate_vr_ov_config(cfg)
+        except ValueError as exc:
+            logger.error("VR-OV eval config validation failed: %s", exc)
+            raise
 
     model = deps["build_model"](cfg)
     model = maybe_wrap_model(model)

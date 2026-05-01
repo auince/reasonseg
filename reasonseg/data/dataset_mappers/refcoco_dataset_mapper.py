@@ -145,8 +145,21 @@ class RefCOCODatasetMapper:
     def _compose_prompt(query_struct, raw_prompt):
         return compose_reasonseg_prompt(query_struct, fallback_text=raw_prompt)
 
-    def _attach_reasonseg_fields(self, dataset_dict, prompts) -> None:
+    @staticmethod
+    def _build_query_metadata(*, image_id, prompt_count):
+        normalized_image_id = int(image_id) if isinstance(image_id, int) else None
+        return [
+            {
+                "image_id": normalized_image_id,
+                "prompt_index": prompt_index,
+                "prompt_count": prompt_count,
+            }
+            for prompt_index in range(prompt_count)
+        ]
+
+    def _attach_query_contract_fields(self, dataset_dict, prompts) -> None:
         query_structs = [parse_query(prompt) for prompt in prompts]
+        prompt_count = len(prompts)
         dataset_dict["query_text"] = prompts
         dataset_dict["query_struct"] = query_structs
         dataset_dict["requested_target"] = [
@@ -159,10 +172,20 @@ class RefCOCODatasetMapper:
         dataset_dict["positive_mask_count"] = [
             1 if query_struct["exists"] else 0 for query_struct in query_structs
         ]
-        dataset_dict["composed_prompt"] = [
-            self._compose_prompt(query_struct, prompt)
-            for prompt, query_struct in zip(prompts, query_structs)
-        ]
+        dataset_dict["query_metadata"] = self._build_query_metadata(
+            image_id=dataset_dict.get("image_id"),
+            prompt_count=prompt_count,
+        )
+        if self.reasonseg_enabled:
+            dataset_dict["composed_prompt"] = [
+                self._compose_prompt(query_struct, prompt)
+                for prompt, query_struct in zip(prompts, query_structs)
+            ]
+        else:
+            dataset_dict.pop("composed_prompt", None)
+
+    def _attach_reasonseg_fields(self, dataset_dict, prompts) -> None:
+        self._attach_query_contract_fields(dataset_dict, prompts)
 
     def __call__(self, dataset_dict):
         dataset_dict = {**dataset_dict}
@@ -232,6 +255,5 @@ class RefCOCODatasetMapper:
             instances.gt_classes = torch.tensor(dummy_classes, dtype=torch.int64)
             dataset_dict["instances"] = instances
 
-        if self.reasonseg_enabled:
-            self._attach_reasonseg_fields(dataset_dict, dataset_dict["prompt"])
+        self._attach_query_contract_fields(dataset_dict, dataset_dict["prompt"])
         return dataset_dict

@@ -11,6 +11,7 @@ from types import SimpleNamespace
 from typing import Any
 
 import torch
+import yaml
 
 
 CONFIG_DUMP_NAME = "config.yaml"
@@ -23,6 +24,57 @@ METRICS_NAME = "metrics.json"
 
 
 _runtime_deps: dict[str, Any] | None = None
+
+
+def _load_config_source_dict(config_path: Path) -> dict[str, Any]:
+    payload = yaml.safe_load(config_path.read_text(encoding="utf-8")) or {}
+    if not isinstance(payload, dict):
+        raise ValueError(f"Expected mapping config at {config_path}")
+
+    base_entry = payload.pop("_BASE_", None)
+    merged_payload: dict[str, Any] = {}
+    if base_entry:
+        base_paths = (base_entry,) if isinstance(base_entry, str) else tuple(base_entry)
+        for relative_base in base_paths:
+            base_payload = _load_config_source_dict((config_path.parent / relative_base).resolve())
+            merged_payload = _deep_merge_dicts(merged_payload, base_payload)
+    return _deep_merge_dicts(merged_payload, payload)
+
+
+def _deep_merge_dicts(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]:
+    merged = copy.deepcopy(base)
+    for key, value in override.items():
+        if isinstance(value, dict) and isinstance(merged.get(key), dict):
+            merged[key] = _deep_merge_dicts(merged[key], value)
+            continue
+        merged[key] = copy.deepcopy(value)
+    return merged
+
+
+def _apply_config_overrides(payload: dict[str, Any], opts: list[str]) -> dict[str, Any]:
+    if len(opts) % 2 != 0:
+        raise ValueError("Config overrides must be passed as KEY VALUE pairs.")
+
+    updated_payload = copy.deepcopy(payload)
+    for key, raw_value in zip(opts[0::2], opts[1::2]):
+        cursor = updated_payload
+        segments = key.split(".")
+        for segment in segments[:-1]:
+            next_value = cursor.get(segment)
+            if not isinstance(next_value, dict):
+                next_value = {}
+                cursor[segment] = next_value
+            cursor = next_value
+        cursor[segments[-1]] = yaml.safe_load(raw_value)
+    return updated_payload
+
+
+def _config_uses_canonical_vr_ov(config_path: Path, opts: list[str]) -> bool:
+    payload = _apply_config_overrides(_load_config_source_dict(config_path), opts)
+    model_payload = payload.get("MODEL", {})
+    if not isinstance(model_payload, dict):
+        return False
+    return model_payload.get("META_ARCHITECTURE") == "VR_OV"
 
 
 def _import_runtime_deps() -> dict[str, Any]:
@@ -155,17 +207,22 @@ def setup_cfg(
 ) -> Any:
     deps = _import_runtime_deps()
 
+    from model.vr_ov_config import validate_vr_ov_config
     from reasonseg.data.runtime_refcoco import register_refcoco_datasets
     from reasonseg.modeling import add_open_world_sam2_config  # noqa: F401
 
     data_root = Path(args.data_root).expanduser().resolve()
+    config_path = Path(args.config).expanduser().resolve()
     os.environ["DETECTRON2_DATASETS"] = str(data_root)
     register_refcoco_datasets(data_root)
 
     cfg = deps["get_cfg"]()
     cfg.set_new_allowed(True)
-    add_open_world_sam2_config(cfg)
-    cfg.merge_from_file(str(Path(args.config).expanduser().resolve()))
+    add_open_world_sam2_config(
+        cfg,
+        include_vr_ov_compat=not _config_uses_canonical_vr_ov(config_path, list(args.opts)),
+    )
+    cfg.merge_from_file(str(config_path))
     cfg.merge_from_list(list(args.opts))
 
     if eval_split is not None:
@@ -187,6 +244,7 @@ def setup_cfg(
         cfg.MODEL.OpenWorldSAM2.TEST.PANOPTIC_ON = False
         cfg.MODEL.OpenWorldSAM2.TEST.SEMANTIC_ON = False
 
+    validate_vr_ov_config(cfg)
     cfg.freeze()
     return cfg
 
@@ -224,7 +282,7 @@ def setup_runtime_logging(
 def maybe_wrap_model(model: torch.nn.Module) -> torch.nn.Module:
     deps = _import_runtime_deps()
     if deps["comm"].get_world_size() > 1:
-        return deps["create_ddp_model"](model, broadcast_buffers=False)
+        return deps["create_ddp_model"](model, broadcast_buffers=False, find_unused_parameters=True)
     return model
 
 
@@ -324,8 +382,7 @@ def run_with_external_distributed_context(
 
     try:
         if world_size > 1:
-            if deps["comm"].get_local_size() == 0:
-                deps["comm"].create_local_process_group(local_world_size)
+            deps["comm"].create_local_process_group(local_world_size)
 
         if has_gpu:
             torch.cuda.set_device(local_rank)

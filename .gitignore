@@ -13,3 +13,10 @@ __pycache__/
 detectron2-main/
 .idea/
 *.egg-info/
+.env
+/.sisyphus/
+/.vscode/
+/resources/code/
+/model/BIOtagging/data/
+/model/BIOtagging/outputs/
+/datasets

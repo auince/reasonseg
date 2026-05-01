@@ -4,7 +4,9 @@ from __future__ import annotations
 from ._compat import CfgNode as CN
 
 
-def add_open_world_sam2_config(cfg) -> None:
+def add_open_world_sam2_config(cfg, *, include_vr_ov_compat: bool = True) -> None:
+    from model.vr_ov_config import add_vr_ov_compat_config
+
     cfg.INPUT.DATASET_MAPPER_NAME = "open_world_instance"
     cfg.INPUT.COLOR_AUG_SSD = False
     cfg.INPUT.CROP.SINGLE_CATEGORY_MAX_AREA = 1.0
@@ -38,6 +40,16 @@ def add_open_world_sam2_config(cfg) -> None:
     cfg.MODEL.OpenWorldSAM2.CROSS_ATTENTION_LAYERS = 1
     cfg.MODEL.OpenWorldSAM2.REASONSEG_ENABLED = False
     cfg.MODEL.OpenWorldSAM2.composition_mode = "composed_prompt"
+
+    cfg.MODEL.OpenWorldSAM2.LEARNED_PARSER = CN()
+    cfg.MODEL.OpenWorldSAM2.LEARNED_PARSER.ENABLED = False
+    cfg.MODEL.OpenWorldSAM2.LEARNED_PARSER.CHECKPOINT = ""
+    cfg.MODEL.OpenWorldSAM2.LEARNED_PARSER.HIDDEN_DIM = 768
+    cfg.MODEL.OpenWorldSAM2.LEARNED_PARSER.NUM_LAYERS = 2
+    cfg.MODEL.OpenWorldSAM2.LEARNED_PARSER.DROPOUT = 0.1
+
+    if include_vr_ov_compat:
+        add_vr_ov_compat_config(cfg)
 
     cfg.MODEL.OpenWorldSAM2.TEST = CN()
     cfg.MODEL.OpenWorldSAM2.TEST.SEMANTIC_ON = False

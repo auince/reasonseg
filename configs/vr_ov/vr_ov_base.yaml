@@ -1,0 +1,37 @@
+_BASE_: "../refcoco/refcoco_base.yaml"
+
+MODEL:
+  META_ARCHITECTURE: "VR_OV"
+  VR_OV:
+    ENABLED: true
+    QUERY_PARSER:
+      ENABLED: true
+      GNN_LAYERS: 2
+      GNN_HEADS: 4
+      CHECKPOINT: ""
+      HIDDEN_DIM: 256
+      OUT_DIM: 256
+    SCENE_GRAPH:
+      ENABLED: true
+      HOI_TOKENS: 5
+      REGION_TOPK: 64
+      HIDDEN_DIM: 256
+    COMP_MATCHER:
+      ENABLED: true
+      CMF_LAYERS: 3
+      HIDDEN_DIM: 256
+    REFINE_DECODER:
+      ENABLED: true
+      MAX_ITER: 3
+      ATTR_THRESHOLD: 0.5
+    LOSS:
+      MASK_ENABLED: true
+      ATTR_ENABLED: false
+      REL_ENABLED: false
+      ACT_ENABLED: false
+      COMPOSE_ENABLED: false
+      LAMBDA_MASK: 5.0
+      LAMBDA_ATTR: 1.0
+      LAMBDA_REL: 0.5
+      LAMBDA_ACT: 0.5
+      LAMBDA_COMPOSE: 0.3
