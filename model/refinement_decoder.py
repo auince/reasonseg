@@ -5,6 +5,7 @@ from typing import List, Optional
 
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
 from model.vr_ov_types import CompositionScores, RefineState
 
@@ -77,10 +78,15 @@ class IterativeRefinementDecoder(nn.Module):
     # ------------------------------------------------------------------
     def forward(
         self,
-        coarse_mask: torch.Tensor,
+        coarse_mask: torch.Tensor | None,
         comp_scores: CompositionScores,
         visual_feat: torch.Tensor,
         mask_decoder: Optional[object] = None,
+        image_embed: torch.Tensor | None = None,
+        image_pe: torch.Tensor | None = None,
+        high_res_features: list[torch.Tensor] | None = None,
+        prompt_encoder: object | None = None,
+        positional_tokens: torch.Tensor | None = None,
     ) -> tuple[torch.Tensor, List[RefineState]]:
         """Run the iterative refinement pipeline.
 
@@ -106,9 +112,53 @@ class IterativeRefinementDecoder(nn.Module):
             coarse_mask=coarse_mask,
             comp_scores=comp_scores,
             visual_feat=visual_feat,
+            have_sam2=(prompt_encoder is not None),
         )
         history: List[RefineState] = []
-        mask: torch.Tensor = coarse_mask
+        mask: torch.Tensor
+
+        use_sam2_stage1 = (
+            coarse_mask is None
+            and prompt_encoder is not None
+            and mask_decoder is not None
+            and image_embed is not None
+            and image_pe is not None
+            and high_res_features is not None
+        )
+
+        if use_sam2_stage1:
+            cmf_feat = self._build_cmf_prompt(comp_scores, visual_feat)
+            B = visual_feat.shape[0]
+            if positional_tokens is not None:
+                pos = positional_tokens[: cmf_feat.shape[1]].unsqueeze(0).expand(B, -1, -1)
+                text_embeds = cmf_feat + pos
+            else:
+                text_embeds = cmf_feat
+
+            sparse_emb, dense_emb = prompt_encoder(
+                points=None, boxes=None, masks=None, text_embeds=text_embeds,
+            )
+            low_masks, iou_pred, _, _ = mask_decoder(
+                image_embeddings=image_embed,
+                image_pe=image_pe,
+                sparse_prompt_embeddings=sparse_emb,
+                dense_prompt_embeddings=dense_emb,
+                multimask_output=False,
+                repeat_image=True,
+                high_res_features=high_res_features,
+            )
+            mask = low_masks[:, 0:1]
+            if mask.shape[-2:] != visual_feat.shape[-2:]:
+                mask = F.interpolate(
+                    mask, size=visual_feat.shape[-2:],
+                    mode="bilinear", align_corners=False,
+                )
+        elif coarse_mask is not None:
+            mask = coarse_mask
+        else:
+            raise ValueError(
+                "IterativeRefinementDecoder requires either coarse_mask or SAM2 components."
+            )
 
         for stage in range(self.max_iter):
             prev_mask = mask.clone()
@@ -168,24 +218,24 @@ class IterativeRefinementDecoder(nn.Module):
     def _validate_inputs(
         self,
         *,
-        coarse_mask: torch.Tensor,
+        coarse_mask: torch.Tensor | None,
         comp_scores: CompositionScores,
         visual_feat: torch.Tensor,
+        have_sam2: bool = False,
     ) -> None:
-        if coarse_mask.ndim != 4 or coarse_mask.shape[1] != 1:
+        if not have_sam2 and coarse_mask is None:
             raise ValueError(
-                f"IterativeRefinementDecoder expects coarse_mask with shape [B, 1, H, W]; got {tuple(coarse_mask.shape)}."
+                "IterativeRefinementDecoder requires coarse_mask when SAM2 components are not provided."
             )
+        if coarse_mask is not None:
+            if coarse_mask.ndim != 4 or coarse_mask.shape[1] != 1:
+                raise ValueError(
+                    f"IterativeRefinementDecoder expects coarse_mask with shape [B, 1, H, W]; got {tuple(coarse_mask.shape)}."
+                )
         expected_channels = self.mask_refine_conv[0].in_channels - 1
         if visual_feat.ndim != 4:
             raise ValueError(
                 f"IterativeRefinementDecoder expects visual_feat with shape [B, C, H, W]; got {tuple(visual_feat.shape)}."
-            )
-        if tuple(visual_feat.shape[:1] + visual_feat.shape[2:]) != tuple(
-            coarse_mask.shape[:1] + coarse_mask.shape[2:]
-        ):
-            raise ValueError(
-                "IterativeRefinementDecoder visual_feat batch/spatial dimensions must match coarse_mask."
             )
         if int(visual_feat.shape[1]) != expected_channels:
             raise ValueError(
@@ -198,7 +248,35 @@ class IterativeRefinementDecoder(nn.Module):
                 raise ValueError(
                     f"IterativeRefinementDecoder requires '{field_name}' in CompositionScores for canonical VR-OV refinement."
                 )
-            if score.ndim != 4 or tuple(score.shape) != tuple(coarse_mask.shape):
-                raise ValueError(
-                    f"IterativeRefinementDecoder expects {field_name} with shape {tuple(coarse_mask.shape)}; got {tuple(score.shape)}."
-                )
+            if coarse_mask is not None:
+                if score.ndim != 4 or tuple(score.shape) != tuple(coarse_mask.shape):
+                    raise ValueError(
+                        f"IterativeRefinementDecoder expects {field_name} with shape {tuple(coarse_mask.shape)}; got {tuple(score.shape)}."
+                    )
+
+    def _build_cmf_prompt(
+        self, comp_scores: CompositionScores, visual_feat: torch.Tensor
+    ) -> torch.Tensor:
+        B, C, H, W = visual_feat.shape
+        cat = comp_scores.cat_feat
+        attr = comp_scores.attr_feat
+        rel = comp_scores.rel_feat
+        act = comp_scores.act_feat
+        if cat is None or rel is None or act is None or attr is None:
+            raise ValueError("All four score maps required for CMF prompt construction")
+
+        if cat.shape[-2:] != (H, W):
+            cat = F.interpolate(cat, size=(H, W), mode="bilinear", align_corners=False)
+        if attr.shape[-2:] != (H, W):
+            attr = F.interpolate(attr, size=(H, W), mode="bilinear", align_corners=False)
+        if rel.shape[-2:] != (H, W):
+            rel = F.interpolate(rel, size=(H, W), mode="bilinear", align_corners=False)
+        if act.shape[-2:] != (H, W):
+            act = F.interpolate(act, size=(H, W), mode="bilinear", align_corners=False)
+
+        cat_pooled = (visual_feat * cat).sum(dim=[-2, -1]) / cat.sum(dim=[-2, -1]).clamp(min=1e-6)
+        attr_pooled = (visual_feat * attr).sum(dim=[-2, -1]) / attr.sum(dim=[-2, -1]).clamp(min=1e-6)
+        rel_pooled = (visual_feat * rel).sum(dim=[-2, -1]) / rel.sum(dim=[-2, -1]).clamp(min=1e-6)
+        act_pooled = (visual_feat * act).sum(dim=[-2, -1]) / act.sum(dim=[-2, -1]).clamp(min=1e-6)
+
+        return torch.stack([cat_pooled, attr_pooled, rel_pooled, act_pooled], dim=1)

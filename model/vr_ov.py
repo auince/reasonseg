@@ -28,6 +28,42 @@ class VR_OV(OpenWorldSAM2):
         )
         return common_kwargs
 
+    @staticmethod
+    def _build_query_info(batch_input: dict[str, Any]) -> dict[str, bool]:
+        query_struct = batch_input.get("query_struct")
+        if query_struct is None:
+            return {"has_attrs": True, "has_relations": True, "has_actions": True}
+        if isinstance(query_struct, list):
+            q = query_struct[0] if query_struct else {}
+        else:
+            q = query_struct
+        return {
+            "has_attrs": bool(q.get("attributes")) if isinstance(q, dict) else True,
+            "has_relations": bool(q.get("relations")) if isinstance(q, dict) else True,
+            "has_actions": bool(q.get("actions")) if isinstance(q, dict) else True,
+        }
+
+    @staticmethod
+    def _slice_comp_scores_for_refinement(comp_scores: Any) -> Any:
+        from model.vr_ov_types import CompositionScores
+        fields = {}
+        for name in ("cat_feat", "attr_feat", "attr_color", "attr_material",
+                     "attr_size", "rel_feat", "act_feat"):
+            val = getattr(comp_scores, name)
+            if val is not None and val.shape[0] > 1:
+                val = val[:1]
+            fields[name] = val
+        return CompositionScores(**fields)
+
+    @staticmethod
+    def _select_coarse_mask(
+        low_res_masks: torch.Tensor,
+        pred_logits: torch.Tensor,
+    ) -> torch.Tensor:
+        iou_scores = pred_logits.squeeze(-1)
+        best_idx = iou_scores.argmax(dim=0)
+        return low_res_masks[best_idx].unsqueeze(0)
+
     def _accumulate_vr_ov_losses(
         self,
         *,
@@ -36,26 +72,47 @@ class VR_OV(OpenWorldSAM2):
         gt_instances: Any,
         comp_scores: Any,
         all_losses: dict[str, list[torch.Tensor]],
+        refined_mask: torch.Tensor | None = None,
+        query_info: dict[str, bool] | None = None,
+        intermediates: dict[str, torch.Tensor] | None = None,
+        visual_feat: torch.Tensor | None = None,
     ) -> None:
         if not isinstance(gt_instances, list):
             gt_instances = [gt_instances]
 
         pred_masks_list = torch.split(pred_masks, [self.num_tokens] * len(gt_instances))
-        pred_logits_list = torch.split(pred_logits, [self.num_tokens] * len(gt_instances))
 
         prompt_preds = []
         prompt_targets = []
         for prompt_idx, prompt_target in enumerate(gt_instances):
-            prompt_pred_mask = pred_masks_list[prompt_idx][0:1]
-            prompt_preds.append(prompt_pred_mask)
             gt_masks = prompt_target.gt_masks.to(dtype=self.dtype, device=self.device)
             if gt_masks.dim() == 3 and gt_masks.shape[0] == 1:
                 gt_masks = gt_masks.squeeze(0)
             prompt_targets.append({"masks": gt_masks})
 
-        pred = {"pred_masks": torch.cat(prompt_preds), "pred_logits": pred_logits}
-        gt = {"targets": prompt_targets}
-        _, loss_dict = self.vr_ov_losses(pred, gt, comp_scores)
+            if refined_mask is not None and prompt_idx == 0:
+                if refined_mask.shape[-2:] != gt_masks.shape[-2:]:
+                    ref = refined_mask if refined_mask.ndim == 4 else refined_mask.unsqueeze(0)
+                    ref = torch.nn.functional.interpolate(
+                        ref, size=gt_masks.shape[-2:], mode="bilinear", align_corners=False
+                    )
+                    prompt_preds.append(ref.squeeze(0))
+                else:
+                    prompt_preds.append(refined_mask)
+                break
+
+        if not prompt_preds:
+            prompt_preds.append(pred_masks_list[0][0:1])
+
+        pred = {"pred_masks": torch.cat(prompt_preds)}
+        gt = {"targets": prompt_targets[: len(prompt_preds)]}
+        _, loss_dict = self.vr_ov_losses(
+            pred, gt,
+            self._slice_comp_scores_for_refinement(comp_scores),
+            query_info=query_info,
+            intermediates=intermediates,
+            visual_feat=visual_feat,
+        )
         gating = self.vr_ov_loss_config
         key_enabled_map = {
             "loss_mask": gating.get("mask_enabled", True),
@@ -103,10 +160,16 @@ class VR_OV(OpenWorldSAM2):
                     sg_hoi_tokens[img_idx],
                 )
 
-            comp_scores = self._run_vr_ov_comp_matcher(
+            comp_scores_result = self._run_vr_ov_comp_matcher(
                 query_graphs=None if query_graphs is None else query_graphs[img_idx],
                 image_embed=features["image_embed"][img_idx],
+                return_intermediates=True,
             )
+            intermediates = None
+            if isinstance(comp_scores_result, tuple):
+                comp_scores, intermediates = comp_scores_result
+            else:
+                comp_scores = comp_scores_result
             batch_feat_with_tokens = self._apply_cross_attention_prompt_context(
                 batch_feat_with_tokens,
                 features["image_embed"][img_idx],
@@ -117,6 +180,24 @@ class VR_OV(OpenWorldSAM2):
                 img_idx=img_idx,
             )
             pred_masks = low_res_masks.squeeze(1)
+
+            refined_mask = None
+            if self.training and self.vr_ov_refine_decoder is not None and comp_scores is not None:
+                visual_feat = features["image_embed"][img_idx].unsqueeze(0)
+                single_comp_scores = self._slice_comp_scores_for_refinement(comp_scores)
+                image_embed_1 = features["image_embed"][img_idx].unsqueeze(0)
+                image_pe = self.visual_model.sam_prompt_encoder.get_dense_pe()
+                refined_mask, _ = self.vr_ov_refine_decoder(
+                    coarse_mask=None,
+                    comp_scores=single_comp_scores,
+                    visual_feat=visual_feat,
+                    mask_decoder=self.visual_model.sam_mask_decoder,
+                    image_embed=image_embed_1,
+                    image_pe=image_pe,
+                    high_res_features=high_res_features,
+                    prompt_encoder=self.visual_model.sam_prompt_encoder,
+                    positional_tokens=self.positional_tokens,
+                )
 
             if not self.training:
                 class_labels = self._class_labels_for_image(
@@ -149,12 +230,18 @@ class VR_OV(OpenWorldSAM2):
                 return intermediate
 
             if self.vr_ov_losses is not None and self.vr_ov_loss_config is not None:
+                query_info = self._build_query_info(batched_inputs[img_idx])
+                visual_feat_for_loss = features["image_embed"][img_idx].unsqueeze(0)
                 self._accumulate_vr_ov_losses(
                     pred_masks=pred_masks,
                     pred_logits=pred_logits,
                     gt_instances=batched_inputs[img_idx]["instances"],
                     comp_scores=comp_scores,
                     all_losses=all_losses,
+                    refined_mask=refined_mask,
+                    query_info=query_info,
+                    intermediates=intermediates,
+                    visual_feat=visual_feat_for_loss,
                 )
 
         if self.training:

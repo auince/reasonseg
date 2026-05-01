@@ -5,6 +5,8 @@ import json
 from pathlib import Path
 from typing import Final, cast
 
+import torch
+
 try:
     from detectron2.evaluation.evaluator import DatasetEvaluator
     from detectron2.utils.comm import all_gather, is_main_process, synchronize
@@ -32,6 +34,19 @@ GROUNDING_THRESHOLDS: Final[tuple[float, ...]] = (0.5, 0.6, 0.7, 0.8, 0.9)
 GROUNDING_PROGRESS_THRESHOLDS: Final[tuple[float, ...]] = tuple(
     sorted({*GROUNDING_THRESHOLDS, 0.75})
 )
+_MORPH_KERNEL_SIZE = 3
+
+
+def _clean_mask(mask: torch.Tensor) -> torch.Tensor:
+    """Apply morphological closing (fill holes) then opening (remove noise)."""
+    mask = mask.float().unsqueeze(0).unsqueeze(0)
+    # Closing: dilate then erode (fills small holes in the mask)
+    mask = torch.nn.functional.max_pool2d(mask, _MORPH_KERNEL_SIZE, stride=1, padding=_MORPH_KERNEL_SIZE // 2)
+    mask = -torch.nn.functional.max_pool2d(-mask, _MORPH_KERNEL_SIZE, stride=1, padding=_MORPH_KERNEL_SIZE // 2)
+    # Opening: erode then dilate (removes small isolated noise)
+    mask = -torch.nn.functional.max_pool2d(-mask, _MORPH_KERNEL_SIZE, stride=1, padding=_MORPH_KERNEL_SIZE // 2)
+    mask = torch.nn.functional.max_pool2d(mask, _MORPH_KERNEL_SIZE, stride=1, padding=_MORPH_KERNEL_SIZE // 2)
+    return (mask.squeeze() > 0.5).bool()
 
 
 def _require(condition: bool, message: str) -> None:
@@ -165,6 +180,7 @@ class GroundingEvaluator(DatasetEvaluator):
             for index, (pred_mask, gt_mask) in enumerate(
                 zip(predicted_masks, gt_masks)
             ):
+                pred_mask = _clean_mask(pred_mask)
                 intersection = float((pred_mask & gt_mask).sum().item())
                 union = float((pred_mask | gt_mask).sum().item())
                 self._accumulator.add(intersection=intersection, union=union)

@@ -100,7 +100,7 @@ class BIOQueryParser(nn.Module):
                 num_layers=ckpt_num_layers,
                 nhead=nhead if effective_hidden_dim % nhead == 0 else 8,
             )
-            self.parser_head.load_state_dict(ckpt)
+            self.parser_head.load_state_dict(ckpt, strict=False)
             logger.info(
                 "BIOQueryParser: loaded BIO tagger (dim=%d, layers=%d) from %s",
                 effective_hidden_dim,
@@ -125,7 +125,18 @@ class BIOQueryParser(nn.Module):
                 )
         self.parser_head.eval()
 
+        self.input_hidden_dim = hidden_dim
         self.hidden_dim = effective_hidden_dim
+
+        if effective_hidden_dim != hidden_dim:
+            self.input_proj = nn.Linear(hidden_dim, effective_hidden_dim)
+            logger.info(
+                "BIOQueryParser: added input projection %d -> %d",
+                hidden_dim,
+                effective_hidden_dim,
+            )
+        else:
+            self.input_proj = nn.Identity()
 
         # ── 2.  Embedding layers ─────────────────────────────────────────
         self.relation_embed = nn.Embedding(num_relation_types, effective_hidden_dim)
@@ -153,7 +164,8 @@ class BIOQueryParser(nn.Module):
         attention_mask: Optional[Tensor],
         tokens_list: list[str],
         query_struct: NormalizedQuery | None = None,
-    ) -> QueryGraph:
+        return_normalized: bool = False,
+    ) -> QueryGraph | tuple[QueryGraph, NormalizedQuery]:
         """Run the full parse pipeline (batch = 1).
 
         Parameters
@@ -180,11 +192,14 @@ class BIOQueryParser(nn.Module):
             attention_mask=attention_mask,
             tokens_list=tokens_list,
         )
-        return self.encode_structure(
+        query_graph = self.encode_structure(
             normalized_query,
             beit3_hidden=beit3_hidden,
             tokens_list=tokens_list,
         )
+        if return_normalized:
+            return query_graph, normalized_query
+        return query_graph
 
     def encode_structure(
         self,
@@ -199,6 +214,7 @@ class BIOQueryParser(nn.Module):
             attention_mask=None,
             tokens_list=tokens_list,
         )
+        beit3_hidden = self.input_proj(beit3_hidden)
         device = beit3_hidden.device
         nodes, node_types = self._build_graph_nodes(
             query_struct,
@@ -227,6 +243,7 @@ class BIOQueryParser(nn.Module):
             attention_mask=attention_mask,
             tokens_list=tokens_list,
         )
+        beit3_hidden = self.input_proj(beit3_hidden)
         if self._has_parser:
             return self.parser_head.decode_structure(
                 tokens_list, beit3_hidden, attention_mask
@@ -244,7 +261,7 @@ class BIOQueryParser(nn.Module):
             raise ValueError(
                 f"BIOQueryParser expects beit3_hidden with shape [1, seq_len, hidden_dim]; got {tuple(beit3_hidden.shape)}."
             )
-        if beit3_hidden.shape[-1] != self.hidden_dim:
+        if beit3_hidden.shape[-1] != self.input_hidden_dim:
             raise ValueError(
                 f"BIOQueryParser hidden dim mismatch: expected {self.hidden_dim}, got {int(beit3_hidden.shape[-1])}."
             )

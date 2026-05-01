@@ -85,7 +85,8 @@ class CompositionalFeatureMatcher(nn.Module):
         query_nodes: Tensor,
         visual_features: Tensor,
         img_feat: Tensor,
-    ) -> tuple[CompositionScores, Tensor]:
+        return_intermediates: bool = False,
+    ) -> tuple[CompositionScores, Tensor] | tuple[CompositionScores, Tensor, dict[str, Tensor]]:
         """Run all five matching paths.
 
         Parameters
@@ -120,11 +121,25 @@ class CompositionalFeatureMatcher(nn.Module):
         bcm_score = bcm_score.sigmoid()
         bcm_2d = bcm_score.view(B, 1, H, W)                   # [B, 1, H, W]
 
-        # ── ATTM — 3-way projected attribute matching ──
+        # ── ATTM — 3-way projected attribute matching (独立 score map) ──
         attr_node = query_nodes[:, 1:2, :]                     # [B, 1, C]
         attr_color = self.color_proj(attr_node)                # [B, 1, C]
         attr_material = self.material_proj(attr_node)          # [B, 1, C]
         attr_size = self.size_proj(attr_node)                  # [B, 1, C]
+
+        attm_color_score = torch.matmul(
+            attr_color, visual_features.transpose(-2, -1)
+        ).sigmoid()                                             # [B, 1, N]
+        attm_material_score = torch.matmul(
+            attr_material, visual_features.transpose(-2, -1)
+        ).sigmoid()                                             # [B, 1, N]
+        attm_size_score = torch.matmul(
+            attr_size, visual_features.transpose(-2, -1)
+        ).sigmoid()                                             # [B, 1, N]
+
+        attm_color_2d = attm_color_score.view(B, 1, H, W)
+        attm_material_2d = attm_material_score.view(B, 1, H, W)
+        attm_size_2d = attm_size_score.view(B, 1, H, W)
         attr_combined = (attr_color + attr_material + attr_size) / 3.0
         attm_score = torch.matmul(
             attr_combined, visual_features.transpose(-2, -1)
@@ -157,10 +172,22 @@ class CompositionalFeatureMatcher(nn.Module):
         scores = CompositionScores(
             cat_feat=bcm_2d,
             attr_feat=attm_2d,
+            attr_color=attm_color_2d,
+            attr_material=attm_material_2d,
+            attr_size=attm_size_2d,
             rel_feat=rsm_2d,
             act_feat=acmm_2d,
         )
 
+        if return_intermediates:
+            return scores, cmf_feat, {
+                "bcm_pre_sigmoid": bcm_score,
+                "attm_color_proj": attr_color,
+                "attm_material_proj": attr_material,
+                "attm_size_proj": attr_size,
+                "rsm_pre_sigmoid": rsm_score,
+                "acmm_cross_attn": acmm_out,
+            }
         return scores, cmf_feat
 
     def _validate_inputs(

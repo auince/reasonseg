@@ -25,13 +25,17 @@ class QueryGraph:
 class CompositionScores:
     """Composition-matching scores for a single region proposal.
 
-    Each field is a score vector (or ``None`` if the modality is absent
-    from the query).  The downstream composition matcher combines these
-    into a final matching score.
+    Each field is a score map ``[B, 1, H, W]`` (or ``None`` if the
+    modality is absent from the query).  Attribute scores are further
+    split into colour / material / size sub-maps for fine-grained
+    supervision.
     """
 
     cat_feat: Optional[torch.Tensor] = None
     attr_feat: Optional[torch.Tensor] = None
+    attr_color: Optional[torch.Tensor] = None
+    attr_material: Optional[torch.Tensor] = None
+    attr_size: Optional[torch.Tensor] = None
     rel_feat: Optional[torch.Tensor] = None
     act_feat: Optional[torch.Tensor] = None
 

@@ -2,13 +2,18 @@ _BASE_: "../refcoco/refcoco_base.yaml"
 
 MODEL:
   META_ARCHITECTURE: "VR_OV"
+  OpenWorldSAM2:
+    TRAIN_VLM: false
+    TRAIN_MASK_DECODER: false
+    TRAIN_PROMPT_ENCODER: false
+    TRAIN_TIE_BREAKER: true
   VR_OV:
     ENABLED: true
     QUERY_PARSER:
       ENABLED: true
       GNN_LAYERS: 2
       GNN_HEADS: 4
-      CHECKPOINT: ""
+      CHECKPOINT: "model/BIOtagging/output/parser_head_best.pt"
       HIDDEN_DIM: 256
       OUT_DIM: 256
     SCENE_GRAPH:
@@ -26,10 +31,10 @@ MODEL:
       ATTR_THRESHOLD: 0.5
     LOSS:
       MASK_ENABLED: true
-      ATTR_ENABLED: false
-      REL_ENABLED: false
-      ACT_ENABLED: false
-      COMPOSE_ENABLED: false
+      ATTR_ENABLED: true
+      REL_ENABLED: true
+      ACT_ENABLED: true
+      COMPOSE_ENABLED: true
       LAMBDA_MASK: 5.0
       LAMBDA_ATTR: 1.0
       LAMBDA_REL: 0.5

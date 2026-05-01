@@ -1,10 +1,11 @@
 # pyright: reportMissingImports=false, reportExplicitAny=false, reportAny=false
 from __future__ import annotations
 
-import argparse
+import atexit
+import csv
 import json
 import logging
-from collections.abc import Sequence
+import signal
 from pathlib import Path
 from typing import Any
 
@@ -82,7 +83,7 @@ def _save_eval_visualization(
     candidates = [s for s in vis_samples if s["gt_area"] > 0]
     if not candidates:
         return
-    num_vis = min(4, len(candidates))
+    num_vis = min(100, len(candidates))
     selected = random.sample(candidates, num_vis) if len(candidates) >= num_vis else candidates
 
     vis_dir = output_dir / "visualization"
@@ -92,6 +93,7 @@ def _save_eval_visualization(
         img_path = sample["file_name"]
         pred_mask = sample["pred_mask"]
         gt_mask = sample["gt_mask"]
+        prompt_text = sample.get("prompt", sample.get("query_text", ""))
 
         try:
             original = np.array(Image.open(img_path).convert("RGB"))
@@ -115,24 +117,27 @@ def _save_eval_visualization(
         pred_overlay = _overlay_mask(original.copy(), pred_mask.astype(bool), color=(0, 255, 0))
         gt_overlay = _overlay_mask(original.copy(), gt_mask.astype(bool), color=(255, 0, 0))
 
-        fig, axes = plt.subplots(1, 3, figsize=(15, 5))
+        iou = sample.get("iou", 0.0)
+        fig, axes = plt.subplots(1, 3, figsize=(18, 5))
         axes[0].imshow(original)
-        axes[0].set_title("Original", fontsize=10)
+        axes[0].set_title("Original Image", fontsize=11, fontweight="bold")
         axes[0].axis("off")
         axes[1].imshow(pred_overlay)
-        axes[1].set_title("Prediction", fontsize=10)
+        axes[1].set_title(f"Prediction (IoU={iou:.3f})", fontsize=11, fontweight="bold")
         axes[1].axis("off")
         axes[2].imshow(gt_overlay)
-        axes[2].set_title("Ground Truth", fontsize=10)
+        axes[2].set_title("Ground Truth", fontsize=11, fontweight="bold")
         axes[2].axis("off")
 
         green_patch = mpatches.Patch(color="green", alpha=0.4, label="Pred")
         red_patch = mpatches.Patch(color="red", alpha=0.4, label="GT")
         fig.legend(handles=[green_patch, red_patch], loc="lower center", ncol=2, fontsize=9)
-        fig.suptitle(f"Eval iter={eval_iter}  sample {idx+1}", fontsize=12)
+
+        title_text = prompt_text if len(prompt_text) <= 120 else prompt_text[:117] + "..."
+        fig.suptitle(title_text, fontsize=10, wrap=True, y=1.02)
         plt.tight_layout()
-        save_path = vis_dir / f"iter_{eval_iter:07d}_sample{idx+1}.png"
-        fig.savefig(save_path, dpi=100, bbox_inches="tight")
+        save_path = vis_dir / f"iter_{eval_iter:07d}_sample{idx+1:03d}.png"
+        fig.savefig(save_path, dpi=120, bbox_inches="tight")
         plt.close(fig)
 
     logger = logging.getLogger("reasonseg")
@@ -170,6 +175,17 @@ def run_evaluation(
         else get_inference_output_dir(cfg.OUTPUT_DIR)
     )
     loader = build_refcoco_test_loader(cfg, dataset_name)
+
+    def _cleanup_loader() -> None:
+        try:
+            it = loader._iterator
+            if it is not None and hasattr(it, "_shutdown_workers"):
+                it._shutdown_workers()
+        except Exception:
+            pass
+
+    atexit.register(_cleanup_loader)
+
     evaluator = GroundingEvaluator(
         dataset_name,
         output_dir=inference_dir,
@@ -192,12 +208,12 @@ def run_evaluation(
                 for out in outputs:
                     if "vr_ov_compositional" in out:
                         vr_ov_artifacts.append(out["vr_ov_compositional"])
-                if len(vis_samples) < 20:
+                if len(vis_samples) < 200:
                     for inp, out in zip(inputs, outputs):
                         pred_masks = (out["grounding_mask"].sigmoid() > 0.5).cpu().numpy()
                         gt_masks = inp["groundings"]["masks"].bool().numpy()
                         for p_idx, (pm, gm) in enumerate(zip(pred_masks, gt_masks)):
-                            if len(vis_samples) >= 20:
+                            if len(vis_samples) >= 200:
                                 break
                             gt_area = float(gm.sum())
                             vis_samples.append({
@@ -206,6 +222,10 @@ def run_evaluation(
                                 "gt_mask": gm,
                                 "gt_area": gt_area,
                                 "prompt_idx": p_idx,
+                                "prompt": inp.get("prompt", inp.get("query_text", "")),
+                                "iou": float(
+                                    (pm.astype(bool) & gm.astype(bool)).sum() / max((pm.astype(bool) | gm.astype(bool)).sum(), 1)
+                                ),
                             })
                 progress_metrics = evaluator.progress_metrics()
                 _update_eval_progress(progress_bar, progress_metrics)

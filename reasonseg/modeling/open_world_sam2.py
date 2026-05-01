@@ -704,6 +704,10 @@ class OpenWorldSAM2(nn.Module):
                 raise ValueError(
                     f"{context}.{field_name} must have shape {(expected_batch, 1, height, width)}; got {tuple(value.shape)}."
                 )
+        for sub_field in ("attr_color", "attr_material", "attr_size"):
+            value = getattr(comp_scores, sub_field, None)
+            if value is not None and not isinstance(value, torch.Tensor):
+                raise TypeError(f"{context}.{sub_field} must be a torch.Tensor.")
         return comp_scores
 
     @staticmethod
@@ -725,10 +729,13 @@ class OpenWorldSAM2(nn.Module):
         if repeats == 1:
             return comp_scores
         return CompositionScores(
-            cat_feat=comp_scores.cat_feat.repeat_interleave(repeats, dim=0),
-            attr_feat=comp_scores.attr_feat.repeat_interleave(repeats, dim=0),
-            rel_feat=comp_scores.rel_feat.repeat_interleave(repeats, dim=0),
-            act_feat=comp_scores.act_feat.repeat_interleave(repeats, dim=0),
+            cat_feat=comp_scores.cat_feat.repeat_interleave(repeats, dim=0) if comp_scores.cat_feat is not None else None,
+            attr_feat=comp_scores.attr_feat.repeat_interleave(repeats, dim=0) if comp_scores.attr_feat is not None else None,
+            attr_color=comp_scores.attr_color.repeat_interleave(repeats, dim=0) if comp_scores.attr_color is not None else None,
+            attr_material=comp_scores.attr_material.repeat_interleave(repeats, dim=0) if comp_scores.attr_material is not None else None,
+            attr_size=comp_scores.attr_size.repeat_interleave(repeats, dim=0) if comp_scores.attr_size is not None else None,
+            rel_feat=comp_scores.rel_feat.repeat_interleave(repeats, dim=0) if comp_scores.rel_feat is not None else None,
+            act_feat=comp_scores.act_feat.repeat_interleave(repeats, dim=0) if comp_scores.act_feat is not None else None,
         )
 
     @staticmethod
@@ -754,6 +761,9 @@ class OpenWorldSAM2(nn.Module):
         return CompositionScores(
             cat_feat=_resize(comp_scores.cat_feat),
             attr_feat=_resize(comp_scores.attr_feat),
+            attr_color=_resize(comp_scores.attr_color),
+            attr_material=_resize(comp_scores.attr_material),
+            attr_size=_resize(comp_scores.attr_size),
             rel_feat=_resize(comp_scores.rel_feat),
             act_feat=_resize(comp_scores.act_feat),
         )
@@ -865,10 +875,11 @@ class OpenWorldSAM2(nn.Module):
         *,
         query_graphs: Sequence[Any] | None,
         image_embed: torch.Tensor,
+        return_intermediates: bool = False,
     ):
         comp_scores = self._new_composition_scores()
         if self.vr_ov_comp_matcher is None:
-            return comp_scores
+            return (comp_scores, None) if return_intermediates else comp_scores
         if not query_graphs:
             raise ValueError("VR-OV composition matcher requires at least one query graph.")
 
@@ -895,18 +906,25 @@ class OpenWorldSAM2(nn.Module):
             .contiguous()
         )
         image_embed_batch = image_embed.unsqueeze(0).expand(prompt_count, -1, -1, -1).contiguous()
-        comp_scores, _ = self.vr_ov_comp_matcher(
+        result = self.vr_ov_comp_matcher(
             query_nodes,
             vis_feat,
             image_embed_batch,
+            return_intermediates=return_intermediates,
         )
-        return self._validate_composition_scores(
+        if return_intermediates:
+            comp_scores, _, intermediates = result
+        else:
+            comp_scores, _ = result
+            intermediates = None
+        comp_scores = self._validate_composition_scores(
             comp_scores,
             expected_batch=prompt_count,
             expected_hw=(int(image_embed.shape[-2]), int(image_embed.shape[-1])),
             require_all_modalities=True,
             context="VR-OV composition matcher output",
         )
+        return (comp_scores, intermediates) if return_intermediates else comp_scores
 
     def _build_prompt_tokens(self, img_feat: torch.Tensor) -> torch.Tensor:
         batch_feat_with_tokens = []

@@ -2,8 +2,10 @@
 from __future__ import annotations
 
 import argparse
+import atexit
 import gc
 import logging
+import signal
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -726,6 +728,22 @@ def _worker(args: argparse.Namespace) -> dict[str, float]:
         resume=args.resume,
     )
     data_loader = build_refcoco_train_loader(cfg)
+
+    def _cleanup_loader() -> None:
+        try:
+            it = data_loader._iterator
+            if it is not None and hasattr(it, "_shutdown_workers"):
+                it._shutdown_workers()
+        except Exception:
+            pass
+
+    atexit.register(_cleanup_loader)
+    for sig in (signal.SIGTERM, signal.SIGINT):
+        try:
+            signal.signal(sig, lambda signum, frame: _cleanup_loader() or exit(1))
+        except ValueError:
+            pass
+
     data_iterator = iter(data_loader)
     final_losses: dict[str, float] = {}
     checkpoint_period = int(cfg.SOLVER.CHECKPOINT_PERIOD)
